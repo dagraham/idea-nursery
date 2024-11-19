@@ -2,7 +2,9 @@ import sys
 
 import click
 from click_shell import shell
+from prompt_toolkit.styles.named_colors import NAMED_COLORS
 from rich import box, print
+from rich.color import Color
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
@@ -132,16 +134,16 @@ def _show_all():
     )
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("Name", min_width=24)
-    table.add_column("Rank", width=4, justify="center")
+    table.add_column("Rank", width=7, justify="center")
     table.add_column("Age", min_width=3, justify="center")
     table.add_column("Rev", min_width=3, justify="center")
 
     def get_rank_color(rank):
         COLORS = {
-            Rank.spark: "blue",
-            Rank.inkling: "yellow",
-            Rank.thought: "red",
-            Rank.idea: "green",
+            Rank.spark: NAMED_COLORS["CornflowerBlue"],
+            Rank.inkling: NAMED_COLORS["LightSkyBlue"],
+            Rank.thought: NAMED_COLORS["GreenYellow"],
+            Rank.idea: NAMED_COLORS["Yellow"],
         }
         return COLORS.get(rank, "white")
 
@@ -150,7 +152,12 @@ def _show_all():
         added_str = format_seconds(now - idea.added)
         reviewed_str = format_seconds(now - idea.reviewed)
         table.add_row(
-            str(idx), idea.name, f"[{c}]{idea.rank}[/{c}]", added_str, reviewed_str
+            str(idx),
+            idea.name,
+            # f"[bold {c}]{idea.rank}[/bold {c}]",
+            f"[{c}]{idea.rank}[/{c}]",
+            added_str,
+            reviewed_str,
         )
     console.print(table)
 
