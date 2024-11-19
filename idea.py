@@ -8,6 +8,9 @@ from rich.color import Color
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
+from rich.traceback import install
+
+install(show_locals=True)
 
 from database import (
     delete_idea,
@@ -17,7 +20,26 @@ from database import (
     review_idea,
     update_idea,
 )
-from model import Idea, Rank, Status, format_seconds, timestamp
+from model import Idea, format_seconds, timestamp
+
+# valid_rank = [Rank.from_int(x) for x in range(1, 5)]
+# valid_rank = [x for x in range(1, 5)]
+# valid_status = [x for x in range(1, 4)]
+
+# ranks = {1: "spark", 2: "inkling", 3: "thought", 4: "brainstorm"}
+# valid_rank = [x for x in ranks.keys()]
+# status = {1: "deferred", 2: "active", 3: "promoted"}
+# valid_status = [x for x in status.keys()]
+
+rank_names = ["spark", "inkling", "thought", "idea"]
+rank_pos_to_str = {pos: value for pos, value in enumerate(rank_names)}
+rank_str_to_pos = {value: pos for pos, value in enumerate(rank_names)}
+valid_rank = [i for i in range(len(rank_names))]
+
+status_names = ["deferred", "active", "prompted"]
+status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
+status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
+valid_status = [i for i in range(len(status_names))]
 
 console = Console()
 
@@ -33,15 +55,15 @@ def cli():
 @click.option(
     "--rank",
     # type=click.Choice(["spark", "inkling", "thought", "idea"]),
-    type=click.Choice([s.name for s in Rank]),
-    default="spark",
+    type=click.Choice([r for r in valid_rank]),
+    default=valid_rank[0],
     help="Rank of the idea",
 )
 @click.option(
     "--status",
     # type=click.Choice(["deferred", "active", "promoted"]),
-    type=click.Choice([s.name for s in Status]),
-    default="active",
+    type=click.Choice([s for s in valid_status]),
+    default=valid_status[1],
     help="Status of the idea",
 )
 def add(name, content, rank, status):
@@ -49,7 +71,7 @@ def add(name, content, rank, status):
     print(
         f"Adding idea with name: {name}, content: {content}, rank: {rank}, status: {status}"
     )
-    idea = Idea(name, content, Rank[rank], Status[status])
+    idea = Idea(name, content, rank, status)
     print(idea)
     insert_idea(idea)
     _show_all()
@@ -71,13 +93,13 @@ def delete(position):
 @click.option(
     "--rank",
     default=None,
-    type=click.Choice([r.name for r in Rank]),
+    type=click.Choice([f"{r}" for r in valid_rank]),
     help="New rank for the idea",
 )
 @click.option(
     "--status",
     default=None,
-    type=click.Choice([s.name for s in Status]),
+    type=click.Choice([f"{s}" for s in valid_status]),
     help="New status for the idea",
 )
 def update(position, name, content, rank, status):
@@ -87,8 +109,8 @@ def update(position, name, content, rank, status):
         position - 1,
         name,
         content,
-        Rank[rank] if rank else None,
-        Status[status] if status else None,
+        rank if rank else None,
+        status if status else None,
     )
     _show_all()
 
@@ -135,19 +157,20 @@ def _show_all():
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("Name", min_width=24)
     table.add_column("Rank", width=7, justify="center")
+    table.add_column("Status", width=7, justify="center")
     table.add_column("Age", min_width=3, justify="center")
     table.add_column("Rev", min_width=3, justify="center")
 
     def get_rank_color(rank):
         COLORS = {
-            Rank.spark: NAMED_COLORS["CornflowerBlue"],
-            Rank.inkling: NAMED_COLORS["LightSkyBlue"],
-            Rank.thought: NAMED_COLORS["GreenYellow"],
-            Rank.idea: NAMED_COLORS["Yellow"],
+            0: NAMED_COLORS["CornflowerBlue"],
+            1: NAMED_COLORS["LightSkyBlue"],
+            2: NAMED_COLORS["GreenYellow"],
+            3: NAMED_COLORS["Yellow"],
         }
-        return COLORS.get(rank, "white")
+        return COLORS.get(int(rank), "white")
 
-    for idx, idea in enumerate(ideas, start=1):
+    for idx, idea in enumerate(ideas, start=0):
         c = get_rank_color(idea.rank)
         added_str = format_seconds(now - idea.added)
         reviewed_str = format_seconds(now - idea.reviewed)
@@ -155,7 +178,8 @@ def _show_all():
             str(idx),
             idea.name,
             # f"[bold {c}]{idea.rank}[/bold {c}]",
-            f"[{c}]{idea.rank}[/{c}]",
+            f"[{c}]{rank_pos_to_str[idea.rank]}[/{c}]",
+            status_pos_to_str[idea.status],
             added_str,
             reviewed_str,
         )

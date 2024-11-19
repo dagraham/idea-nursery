@@ -41,17 +41,62 @@ def timestamp() -> int:
     return round(datetime.datetime.now().timestamp())
 
 
-class Rank(str, Enum):
-    spark = "spark"
-    inkling = "inkling"
-    thought = "thought"
-    idea = "idea"
+# class Rank(str, Enum):
+#     spark = "spark"
+#     inkling = "inkling"
+#     thought = "thought"
+#     idea = "idea"
+#
+#
+# class Status(str, Enum):
+#     deferred = "deferred"
+#     active = "active"
+#     promoted = "promoted"
 
 
-class Status(str, Enum):
-    deferred = "deferred"
-    active = "active"
-    promoted = "promoted"
+# class Rank:
+#     _valid_ranks = {1: "spark", 2: "inkling", 3: "thought", 4: "brainstorm"}
+#
+#     def __init__(self, value: int):
+#         if value not in [1, 2, 3, 4]:
+#             raise ValueError(f"{value} is not a valid Rank")
+#         self.value = value
+#
+#     @classmethod
+#     def from_int(cls, value: int):
+#         """Create a Rank from an integer, validating it."""
+#         return cls(value)
+#
+#     @classmethod
+#     def display_name(cls, value: int) -> str:
+#         """Get the display name for a given integer rank."""
+#         return cls._valid_ranks.get(value, "Unknown")
+#
+#     def __str__(self):
+#         return self.display_name(self.value)
+#
+#
+# class Status:
+#     _valid_statuses = {1: "deferred", 2: "active", 3: "promoted"}
+#
+#     def __init__(self, value: int):
+#         if value not in [1, 2, 3]:
+#             raise ValueError(f"{value} is not a valid Status")
+#         self.value = value
+#
+#     @classmethod
+#     def from_int(cls, value: int):
+#         """Create a Status from an integer, validating it."""
+#         return cls(value)
+#
+#     @classmethod
+#     def display_name(cls, value: int) -> str:
+#         """Get the display name for a given integer status."""
+#         return cls._valid_statuses.get(value, "Unknown")
+#
+#     def __str__(self):
+#         return self.display_name(self.value)
+#
 
 
 class Idea:
@@ -59,8 +104,8 @@ class Idea:
         self,
         name,
         content,
-        rank=Rank.spark,
-        status=Status.active,
+        rank=1,
+        status=2,
         added=None,
         reviewed=None,
         position=None,
@@ -68,12 +113,10 @@ class Idea:
         self.name = name
         self.content = content
         self.rank = rank
+        self.status = status
         self.added = added if added is not None else timestamp()
         self.reviewed = reviewed if reviewed is not None else timestamp()
-        self.status = (
-            status if status is not None else 1
-        )  # 0 = waiting,  1 = active, 2 =
         self.position = position if position is not None else None
 
     def __repr__(self) -> str:
-        return f"({self.name}, {self.rank}, {self.added}, {self.reviewed}, {self.status}, {self.position})"
+        return f"({self.name}, {self.rank}, {self.status}, {self.added}, {self.reviewed}, {self.position})"

@@ -14,8 +14,8 @@ def create_table():
         """CREATE TABLE IF NOT EXISTS ideas (
             name text,
             content text,
-            rank text,
-            status text,
+            rank integer,
+            status integer,
             added integer,
             reviewed integer,
             position integer
