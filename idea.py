@@ -30,7 +30,7 @@ rank_str_to_pos = {value: pos for pos, value in enumerate(rank_names)}
 valid_rank = [i for i in range(len(rank_names))]
 
 status_names = ["shelved", "nursery", "library"]
-status_colors = ["#BDB76B", "#87CEFA", "#00FA9A"]
+status_colors = ["#FFDEAD", "#87CEFA", "#32CD32"]
 # status_colors = ["#BDB76B", "#ADFF2F", "#FF8C00"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
@@ -134,7 +134,7 @@ def _list_all(view: str = ""):
     now = timestamp()
     ideas = get_all_ideas()
     console.clear()
-    console.print(" 💡[bold #87CEFA]IdeaNursery[/bold #87CEFA]")
+    console.print(" 💡[#87CEFA]IdeaNursery[/#87CEFA]")
 
     table = Table(
         show_header=True, header_style="bold blue", expand=True, box=box.HEAVY_EDGE
@@ -146,27 +146,24 @@ def _list_all(view: str = ""):
     table.add_column("age", min_width=3, justify="center")
     table.add_column("rev", min_width=3, justify="center")
 
-    def get_rank_color(rank):
-        COLORS = {
-            0: NAMED_COLORS["CornflowerBlue"],
-            1: NAMED_COLORS["LightSkyBlue"],
-            2: NAMED_COLORS["GreenYellow"],
-            3: NAMED_COLORS["Yellow"],
-        }
-        return COLORS.get(int(rank), "white")
+    # def get_rank_color(rank):
+    #     COLORS = {
+    #         0: NAMED_COLORS["CornflowerBlue"],
+    #         1: NAMED_COLORS["LightSkyBlue"],
+    #         2: NAMED_COLORS["GreenYellow"],
+    #         3: NAMED_COLORS["Yellow"],
+    #     }
+    #     return COLORS.get(int(rank), "white")
 
     for idx, idea in enumerate(ideas, start=1):
-        c = get_rank_color(idea.rank)
+        # c = get_rank_color(idea.rank)
         added_str = format_timedelta(now - idea.added)
         reviewed_str = format_timedelta(now - idea.reviewed)
         table.add_row(
             str(idx),
             idea.name,
-            # f"[bold {rank_colors[idea.rank]}]{rank_pos_to_str[idea.rank]}[/bold {rank_colors[idea.rank]}]",
             f"[{rank_colors[idea.rank]}]{rank_pos_to_str[idea.rank]}[{rank_colors[idea.rank]}]",
-            # f"[bold {status_colors[idea.status]}]{status_pos_to_str[idea.status]}[/bold {status_colors[idea.status]}]",
             f"[{status_colors[idea.status]}]{status_pos_to_str[idea.status]}[{status_colors[idea.status]}]",
-            # status_pos_to_str[idea.status],
             added_str,
             reviewed_str,
         )
