@@ -7,10 +7,11 @@ from rich import box, print
 from rich.color import Color
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.panel import Panel
 from rich.table import Table
 from rich.traceback import install
 
-install(show_locals=True)
+install(show_locals=True, max_frames=4)
 
 from database import (
     delete_idea,
@@ -20,23 +21,17 @@ from database import (
     review_idea,
     update_idea,
 )
-from model import Idea, format_seconds, timestamp
-
-# valid_rank = [Rank.from_int(x) for x in range(1, 5)]
-# valid_rank = [x for x in range(1, 5)]
-# valid_status = [x for x in range(1, 4)]
-
-# ranks = {1: "spark", 2: "inkling", 3: "thought", 4: "brainstorm"}
-# valid_rank = [x for x in ranks.keys()]
-# status = {1: "deferred", 2: "active", 3: "promoted"}
-# valid_status = [x for x in status.keys()]
+from model import Idea, format_datetime, format_timedelta, timestamp
 
 rank_names = ["spark", "inkling", "thought", "idea"]
+rank_colors = ["#4775e6", "#7a9ca6", "#c2d14d", "#ffff00"]
 rank_pos_to_str = {pos: value for pos, value in enumerate(rank_names)}
 rank_str_to_pos = {value: pos for pos, value in enumerate(rank_names)}
 valid_rank = [i for i in range(len(rank_names))]
 
-status_names = ["deferred", "active", "prompted"]
+status_names = ["shelved", "nursery", "library"]
+status_colors = ["#BDB76B", "#87CEFA", "#00FA9A"]
+# status_colors = ["#BDB76B", "#ADFF2F", "#FF8C00"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
 valid_status = [i for i in range(len(status_names))]
@@ -55,15 +50,15 @@ def cli():
 @click.option(
     "--rank",
     # type=click.Choice(["spark", "inkling", "thought", "idea"]),
-    type=click.Choice([r for r in valid_rank]),
-    default=valid_rank[0],
+    type=click.Choice([r for r in rank_names]),
+    default=rank_names[0],
     help="Rank of the idea",
 )
 @click.option(
     "--status",
     # type=click.Choice(["deferred", "active", "promoted"]),
-    type=click.Choice([s for s in valid_status]),
-    default=valid_status[1],
+    type=click.Choice([s for s in status_names]),
+    default=status_names[1],
     help="Status of the idea",
 )
 def add(name, content, rank, status):
@@ -71,10 +66,15 @@ def add(name, content, rank, status):
     print(
         f"Adding idea with name: {name}, content: {content}, rank: {rank}, status: {status}"
     )
-    idea = Idea(name, content, rank, status)
+    idea = Idea(
+        name,
+        content,
+        rank_str_to_pos[rank] if rank is not None else None,
+        status_str_to_pos[status] if status is not None else None,
+    )
     print(idea)
     insert_idea(idea)
-    _show_all()
+    _list_all()
 
 
 @cli.command(short_help="Deletes an idea")
@@ -83,7 +83,7 @@ def delete(position):
     """Delete an idea at POSITION."""
     print(f"Deleting idea at position {position}")
     delete_idea(position - 1)  # Adjust for zero-based index
-    _show_all()
+    _list_all()
 
 
 @cli.command(short_help="Updates an idea")
@@ -93,13 +93,13 @@ def delete(position):
 @click.option(
     "--rank",
     default=None,
-    type=click.Choice([f"{r}" for r in valid_rank]),
+    type=click.Choice([f"{r}" for r in rank_names]),
     help="New rank for the idea",
 )
 @click.option(
     "--status",
     default=None,
-    type=click.Choice([f"{s}" for s in valid_status]),
+    type=click.Choice([f"{s}" for s in status_names]),
     help="New status for the idea",
 )
 def update(position, name, content, rank, status):
@@ -109,10 +109,10 @@ def update(position, name, content, rank, status):
         position - 1,
         name,
         content,
-        rank if rank else None,
-        status if status else None,
+        rank_str_to_pos[rank] if rank is not None else None,
+        status_str_to_pos[status] if status is not None else None,
     )
-    _show_all()
+    _list_all()
 
 
 @cli.command(short_help="Updates reviewed timestamp for an idea")
@@ -121,45 +121,30 @@ def review(position):
     """Update the reviewed timestamp for an idea at POSITION."""
     print(f"Updating reviewed timestamp for idea at position {position}")
     review_idea(position - 1)
-    _show_all()
+    _list_all()
 
 
-@cli.command(short_help="Show idea content")
-@click.argument("position", type=int)
-def content(position):
-    """Show content of the idea at POSITION."""
-    hsh = get_idea_by_position(position - 1)
-    if hsh:
-        res = f"""\
-# {hsh['name']}
-
-{hsh['content']}
-"""
-        md = Markdown(res)
-        console.print(md)
+@cli.command(short_help="Lists ideas")
+def list():
+    _list_all()
 
 
-@cli.command(short_help="Lists all ideas")
-def show():
-    _show_all()
-
-
-def _show_all():
+def _list_all(view: str = ""):
     """List all ideas."""
     now = timestamp()
     ideas = get_all_ideas()
     console.clear()
-    console.print(" 💡[bold magenta]Idea[/bold magenta]")
+    console.print(" 💡[bold #87CEFA]IdeaNursery[/bold #87CEFA]")
 
     table = Table(
         show_header=True, header_style="bold blue", expand=True, box=box.HEAVY_EDGE
     )
     table.add_column("#", style="dim", min_width=1, justify="right")
-    table.add_column("Name", min_width=24)
-    table.add_column("Rank", width=7, justify="center")
-    table.add_column("Status", width=7, justify="center")
-    table.add_column("Age", min_width=3, justify="center")
-    table.add_column("Rev", min_width=3, justify="center")
+    table.add_column("name", min_width=24)
+    table.add_column("rank", width=7, justify="center")
+    table.add_column("status", width=7, justify="center")
+    table.add_column("age", min_width=3, justify="center")
+    table.add_column("rev", min_width=3, justify="center")
 
     def get_rank_color(rank):
         COLORS = {
@@ -170,28 +155,97 @@ def _show_all():
         }
         return COLORS.get(int(rank), "white")
 
-    for idx, idea in enumerate(ideas, start=0):
+    for idx, idea in enumerate(ideas, start=1):
         c = get_rank_color(idea.rank)
-        added_str = format_seconds(now - idea.added)
-        reviewed_str = format_seconds(now - idea.reviewed)
+        added_str = format_timedelta(now - idea.added)
+        reviewed_str = format_timedelta(now - idea.reviewed)
         table.add_row(
             str(idx),
             idea.name,
-            # f"[bold {c}]{idea.rank}[/bold {c}]",
-            f"[{c}]{rank_pos_to_str[idea.rank]}[/{c}]",
-            status_pos_to_str[idea.status],
+            # f"[bold {rank_colors[idea.rank]}]{rank_pos_to_str[idea.rank]}[/bold {rank_colors[idea.rank]}]",
+            f"[{rank_colors[idea.rank]}]{rank_pos_to_str[idea.rank]}[{rank_colors[idea.rank]}]",
+            # f"[bold {status_colors[idea.status]}]{status_pos_to_str[idea.status]}[/bold {status_colors[idea.status]}]",
+            f"[{status_colors[idea.status]}]{status_pos_to_str[idea.status]}[{status_colors[idea.status]}]",
+            # status_pos_to_str[idea.status],
             added_str,
             reviewed_str,
         )
     console.print(table)
 
 
+@cli.command(short_help="Shows details for idea")
+@click.argument("position", type=int)
+def details(position):
+    """Show details for idea at POSITION."""
+    now = timestamp()
+    console.clear()
+    hsh = get_idea_by_position(position - 1)
+    # print(hsh)
+
+    # console.print(" 💡[bold magenta]Idea[/bold magenta]")
+    if hsh:
+        rank = hsh.get("rank")
+        rank_str = (
+            f"{rank}          ({rank_pos_to_str[rank]})" if rank is not None else ""
+        )
+        status = hsh.get("status")
+        status_str = (
+            f"{status}          ({status_pos_to_str[status]})"
+            if status is not None
+            else ""
+        )
+        added = hsh.get("added")
+        added_str = (
+            f"{added} ({format_datetime(added)} ~ {format_timedelta(now - added, short=False)} ago)"
+            if added is not None
+            else ""
+        )
+        reviewed = hsh.get("reviewed")
+        reviewed_str = (
+            f"{reviewed} ({format_datetime(reviewed)} ~ {format_timedelta(now - reviewed, short=False)} ago)"
+            if reviewed is not None
+            else ""
+        )
+        meta = f"""\
+---  
+rank:      {rank_str}  
+status:    {status_str}    
+added:     {added_str}  
+reviewed:  {reviewed_str}  
+--- 
+"""
+
+        res = f"""\
+# {hsh['name']}
+
+{hsh['content']}\
+"""
+        md = Markdown(res)
+        # console.print(meta)
+        print(Panel.fit(meta + res))
+
+        console.print(Panel.fit(md))
+
+
+# def main():
+#     if len(sys.argv) > 1 and sys.argv[1] == "shell":
+#         sys.argv.pop(1)  # Remove 'shell' argument to prevent interference
+#         _list_all()
+#         cli()  # Start the interactive shell
+#     else:
+#         sys.argv.append("--help")
+#         cli.main(prog_name="app")  # Process as a standard Click command
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "shell":
         sys.argv.pop(1)  # Remove 'shell' argument to prevent interference
-        _show_all()
+        _list_all()
         cli()  # Start the interactive shell
     else:
+        # If no arguments are provided, show help
+        if len(sys.argv) == 1:
+            sys.argv.append("--help")  # Append --help to arguments
         cli.main(prog_name="app")  # Process as a standard Click command
 
 

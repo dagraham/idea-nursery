@@ -56,13 +56,20 @@ def get_all_ideas() -> List[Idea]:
 
 def get_idea_by_position(position: int):
     c.execute(
-        "SELECT name, content FROM ideas WHERE position=:position",
+        "SELECT name, rank, status, added, reviewed, content FROM ideas WHERE position=:position",
         {"position": position},
     )
     result = c.fetchone()
     if result:
-        name, content = result
-        return {"name": name, "content": content}
+        name, rank, status, added, reviewed, content = result
+        return {
+            "name": name,
+            "rank": rank,
+            "status": status,
+            "added": added,
+            "reviewed": reviewed,
+            "content": content,
+        }
     else:
         return None  # Return None if no matching record is found
 

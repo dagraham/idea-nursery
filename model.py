@@ -2,7 +2,7 @@ import datetime
 from enum import Enum
 
 
-def format_seconds(seconds: int, short: bool = True) -> str:
+def format_timedelta(seconds: int, short: bool = True) -> str:
     if seconds == 0:
         return "0m"
     sign = ""
@@ -35,6 +35,10 @@ def format_seconds(seconds: int, short: bool = True) -> str:
         return f"{sign}{until[0]}"
     else:
         return f"{sign}{''.join(until)}"
+
+
+def format_datetime(seconds: int, fmt: str = "%Y-%m-%d %H:%M %Z") -> str:
+    return datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)
 
 
 def timestamp() -> int:
