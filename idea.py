@@ -23,12 +23,14 @@ from database import (
 )
 from model import Idea, format_datetime, format_timedelta, timestamp
 
+# there will be as many ranks as there are rank_names. names for display and entry, integers for the database
 rank_names = ["spark", "inkling", "thought", "idea"]
 rank_colors = ["#4775e6", "#7a9ca6", "#c2d14d", "#ffff00"]
 rank_pos_to_str = {pos: value for pos, value in enumerate(rank_names)}
 rank_str_to_pos = {value: pos for pos, value in enumerate(rank_names)}
 valid_rank = [i for i in range(len(rank_names))]
 
+# ditto rank comment above
 status_names = ["shelved", "nursery", "library"]
 status_colors = ["#FFDEAD", "#87CEFA", "#32CD32"]
 # status_colors = ["#BDB76B", "#ADFF2F", "#FF8C00"]
@@ -146,17 +148,7 @@ def _list_all(view: str = ""):
     table.add_column("age", min_width=3, justify="center")
     table.add_column("rev", min_width=3, justify="center")
 
-    # def get_rank_color(rank):
-    #     COLORS = {
-    #         0: NAMED_COLORS["CornflowerBlue"],
-    #         1: NAMED_COLORS["LightSkyBlue"],
-    #         2: NAMED_COLORS["GreenYellow"],
-    #         3: NAMED_COLORS["Yellow"],
-    #     }
-    #     return COLORS.get(int(rank), "white")
-
     for idx, idea in enumerate(ideas, start=1):
-        # c = get_rank_color(idea.rank)
         added_str = format_timedelta(now - idea.added)
         reviewed_str = format_timedelta(now - idea.reviewed)
         table.add_row(
@@ -182,56 +174,43 @@ def details(position):
     # console.print(" 💡[bold magenta]Idea[/bold magenta]")
     if hsh:
         rank = hsh.get("rank")
-        rank_str = (
-            f"{rank}          ({rank_pos_to_str[rank]})" if rank is not None else ""
-        )
+        rank_str = f"{rank:<12} {rank_pos_to_str[rank]:<10}" if rank is not None else ""
         status = hsh.get("status")
         status_str = (
-            f"{status}          ({status_pos_to_str[status]})"
+            f"{status:<12} {status_pos_to_str[status]:<10}"
             if status is not None
             else ""
         )
         added = hsh.get("added")
         added_str = (
-            f"{added} ({format_datetime(added)} ~ {format_timedelta(now - added, short=False)} ago)"
+            f"{added:<12} {format_timedelta(now - added, short=False):<10} {format_datetime(added)}"
             if added is not None
             else ""
         )
         reviewed = hsh.get("reviewed")
         reviewed_str = (
-            f"{reviewed} ({format_datetime(reviewed)} ~ {format_timedelta(now - reviewed, short=False)} ago)"
+            f"{reviewed:<12} {format_timedelta(now - reviewed, short=False):<10} {format_datetime(reviewed)}"
             if reviewed is not None
             else ""
         )
         meta = f"""\
----  
+field        stored         presented 
 rank:      {rank_str}  
 status:    {status_str}    
 added:     {added_str}  
-reviewed:  {reviewed_str}  
---- 
+reviewed:  {reviewed_str}\
 """
 
         res = f"""\
 # {hsh['name']}
 
-{hsh['content']}\
+{hsh['content']}
 """
-        md = Markdown(res)
         # console.print(meta)
-        print(Panel.fit(meta + res))
+        console.print(Panel(meta, title="metadata"))
 
-        console.print(Panel.fit(md))
-
-
-# def main():
-#     if len(sys.argv) > 1 and sys.argv[1] == "shell":
-#         sys.argv.pop(1)  # Remove 'shell' argument to prevent interference
-#         _list_all()
-#         cli()  # Start the interactive shell
-#     else:
-#         sys.argv.append("--help")
-#         cli.main(prog_name="app")  # Process as a standard Click command
+        md = Markdown(res)
+        console.print(Panel(md, title="name and content as markdown"))
 
 
 def main():
