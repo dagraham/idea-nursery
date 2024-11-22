@@ -27,7 +27,7 @@ from database import (
     review_idea,
     update_idea,
 )
-from model import Idea, format_datetime, format_timedelta, timestamp
+from model import format_datetime, format_timedelta, timestamp
 
 rank_names = ["spark", "inkling", "thought", "idea"]
 rank_colors = ["#6495ed", "#87CEFA", "#adff2f", "#ffff00"]

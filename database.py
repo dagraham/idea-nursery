@@ -3,7 +3,7 @@ import sqlite3
 from os import walk
 from typing import List, Optional, Tuple
 
-from model import Idea, timestamp
+from model import timestamp
 
 conn = sqlite3.connect("ideas.db")
 c = conn.cursor()
@@ -54,19 +54,6 @@ def create_view(order_by_column="id"):
         ORDER BY {order_by_column};
     """
     c.execute(query)
-
-
-# def get_ideas_from_view() -> List[Idea]:
-#     """Fetch ideas from the dynamically created view."""
-#     c.execute(
-#         "SELECT position, name, rank, status, added, reviewed FROM idea_positions"
-#     )
-#     results = c.fetchall()
-#     ideas = []
-#     for result in results:
-#         # Adjust this line to match the constructor of your Idea class
-#         ideas.append(Idea(*result))
-#     return ideas
 
 
 def get_ideas_from_view() -> List[Tuple]:
@@ -136,13 +123,14 @@ def insert_idea(
         )
 
 
-def get_all_ideas() -> List[Idea]:
-    c.execute("select * from ideas")
-    results = c.fetchall()
-    ideas = []
-    for result in results:
-        ideas.append(Idea(*result))
-    return ideas
+# def get_all_ideas() -> List[Idea]:
+#     c.execute("select * from ideas")
+#     results = c.fetchall()
+#     ideas = []
+#     for result in results:
+#         ideas.append(Idea(*result))
+#     return ideas
+#
 
 
 def get_idea_by_position(position: int):
