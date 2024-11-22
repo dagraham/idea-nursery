@@ -112,6 +112,7 @@ class Idea:
         status=2,
         added=None,
         reviewed=None,
+        id=None,
         position=None,
     ):
         self.name = name
@@ -120,7 +121,8 @@ class Idea:
         self.status = status
         self.added = added if added is not None else timestamp()
         self.reviewed = reviewed if reviewed is not None else timestamp()
+        self.id = id if id is not None else None
         self.position = position if position is not None else None
 
     def __repr__(self) -> str:
-        return f"({self.name}, {self.rank}, {self.status}, {self.added}, {self.reviewed}, {self.position})"
+        return f"({self.name}, {self.rank}, {self.status}, {self.added}, {self.reviewed}, {self.id}, {self.position})"

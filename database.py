@@ -1,7 +1,7 @@
 import datetime
 import sqlite3
 from os import walk
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from model import Idea, timestamp
 
@@ -11,36 +11,127 @@ c = conn.cursor()
 
 def create_table():
     c.execute(
-        """CREATE TABLE IF NOT EXISTS ideas (
-            name text,
-            content text,
-            rank integer,
-            status integer,
-            added integer,
-            reviewed integer,
-            position integer
-            )"""
+        """\
+        CREATE TABLE IF NOT EXISTS ideas (
+            name TEXT,
+            content TEXT,
+            rank INTEGER,
+            status INTEGER,
+            added INTEGER,
+            reviewed INTEGER,
+            id INTEGER PRIMARY KEY,
+            position INTEGER UNIQUE
+        )"""
     )
 
 
 create_table()
 
 
-def insert_idea(idea: Idea):
-    c.execute("select count(*) FROM ideas")
-    count = c.fetchone()[0]
-    idea.position = count if count else 0
+def create_view(order_by_column="id"):
+    # Validate the column name to prevent SQL injection
+    valid_columns = {"id", "name", "rank", "status", "added", "reviewed"}
+    if order_by_column not in valid_columns:
+        raise ValueError(f"Invalid column name: {order_by_column}")
+
+    # Drop the view if it already exists
+    c.execute("DROP VIEW IF EXISTS idea_positions")
+
+    # Create the SQL query dynamically
+    query = f"""
+        CREATE VIEW idea_positions AS
+        SELECT 
+            name,
+            rank,
+            status,
+            added,
+            reviewed,
+            id,
+            (SELECT COUNT(*)
+             FROM ideas AS i2
+             WHERE i2.{order_by_column} <= ideas.{order_by_column}) AS position
+        FROM ideas
+        ORDER BY {order_by_column};
+    """
+    c.execute(query)
+
+
+# def get_ideas_from_view() -> List[Idea]:
+#     """Fetch ideas from the dynamically created view."""
+#     c.execute(
+#         "SELECT position, name, rank, status, added, reviewed FROM idea_positions"
+#     )
+#     results = c.fetchall()
+#     ideas = []
+#     for result in results:
+#         # Adjust this line to match the constructor of your Idea class
+#         ideas.append(Idea(*result))
+#     return ideas
+
+
+def get_ideas_from_view() -> List[Tuple]:
+    """Fetch ideas from the dynamically created view."""
+    c.execute(
+        "SELECT name, rank, status, added, reviewed, id, position FROM idea_positions"
+    )
+    return c.fetchall()
+
+
+def insert_idea(
+    name: str,
+    content: str = "",
+    rank: int = 0,
+    status: int = 1,
+    added: int = timestamp(),
+    reviewed: int = timestamp(),
+):
+    """Insert a new idea into the database."""
+    reviewed = (
+        reviewed if reviewed is not None else added
+    )  # Default reviewed to added if not provided
     with conn:
         c.execute(
-            "INSERT INTO ideas VALUES (:name, :content, :rank, :status, :added, :reviewed, :position)",
+            """INSERT INTO ideas (name, content, rank, status, added, reviewed)
+               VALUES (:name, :content, :rank, :status, :added, :reviewed)""",
             {
-                "name": idea.name,
-                "content": idea.content,
-                "rank": idea.rank,
-                "status": idea.status,
-                "added": idea.added,
-                "reviewed": idea.added,
-                "position": idea.position,
+                "name": name,
+                "content": content,
+                "rank": rank,
+                "status": status,
+                "added": added,
+                "reviewed": reviewed,
+            },
+        )
+
+
+def insert_idea(
+    name: str,
+    content: str,
+    rank: int,
+    status: int,
+    added: int = timestamp(),
+    reviewed: int = timestamp(),
+):
+    """Insert a new idea into the database."""
+    reviewed = reviewed if reviewed is not None else added
+
+    # Determine the next position
+    c.execute("SELECT MAX(position) FROM ideas")
+    max_position = c.fetchone()[0]
+    position = (max_position + 1) if max_position is not None else 1
+
+    with conn:
+        c.execute(
+            """INSERT INTO ideas (position, name, content, rank, status, added, reviewed)
+               VALUES (:position, :name, :content, :rank, :status, :added, :reviewed)""",
+            {
+                "position": position,
+                "name": name,
+                "content": content,
+                "rank": rank,
+                "status": status,
+                "added": added,
+                "reviewed": reviewed,
             },
         )
 
@@ -97,8 +188,8 @@ def update_idea(
     position: int,
     name: Optional[str] = None,
     content: Optional[str] = None,
-    rank: Optional[str] = None,
-    status: Optional[str] = None,
+    rank: Optional[int] = None,
+    status: Optional[int] = None,
 ):
     # Build the base query and parameters
     base_query = "UPDATE ideas SET "
