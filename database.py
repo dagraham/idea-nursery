@@ -3,10 +3,15 @@ import sqlite3
 from os import walk
 from typing import List, Optional, Tuple
 
+import click
+
 from model import timestamp
 
 conn = sqlite3.connect("ideas.db")
 c = conn.cursor()
+
+default_rank_setting = 8
+default_status_setting = 6
 
 
 def create_table():
@@ -19,8 +24,7 @@ def create_table():
             status INTEGER,
             added INTEGER,
             reviewed INTEGER,
-            id INTEGER PRIMARY KEY,
-            position INTEGER UNIQUE
+            id INTEGER PRIMARY KEY
         )"""
     )
 
@@ -28,12 +32,25 @@ def create_table():
 create_table()
 
 
-def create_view(order_by_column="id"):
-    # Validate the column name to prevent SQL injection
-    valid_columns = {"id", "name", "rank", "status", "added", "reviewed"}
-    if order_by_column not in valid_columns:
-        raise ValueError(f"Invalid column name: {order_by_column}")
+def initialize_settings():
+    """Ensure row 0 exists for storing view settings."""
+    c.execute("SELECT COUNT(*) FROM ideas WHERE id = 0")
+    # ts = timestamp()
+    if c.fetchone()[0] == 0:
+        with conn:
+            c.execute(
+                # """INSERT INTO ideas (name, content, rank, status, added, reviewed)
+                #    VALUES ('settings', '', None, None, 0, 0)"""
+                f"""INSERT INTO ideas (name, content, status, rank, added, reviewed, id)
+                   VALUES ('settings', '', {default_status_setting}, {default_rank_setting}, 0, 0, 0)"""
+            )
 
+
+initialize_settings()
+
+
+def create_view():
+    # Validate the column name to prevent SQL injection
     # Drop the view if it already exists
     c.execute("DROP VIEW IF EXISTS idea_positions")
 
@@ -49,46 +66,110 @@ def create_view(order_by_column="id"):
             id,
             (SELECT COUNT(*)
              FROM ideas AS i2
-             WHERE i2.{order_by_column} <= ideas.{order_by_column}) AS position
+             WHERE i2.id < ideas.id) AS position
         FROM ideas
-        ORDER BY {order_by_column};
+        ORDER BY status, rank, reviewed, id
     """
     c.execute(query)
 
 
+create_view()
+
+
+def get_view_settings() -> Tuple[int | None]:
+    """Fetch the current view settings."""
+    c.execute("SELECT status, rank FROM ideas WHERE id = 0")
+    result = c.fetchone()
+    with open("debug.log", "a") as debug_file:
+        click.echo(f"get_view_settings: {result = }", file=debug_file)
+    # return result if result else (default_status_setting, default_rank_setting)
+    return result if result else (6, 8)
+
+
+def set_view_settings(status: Optional[int] = 6, rank: Optional[int] = 8):
+    """Update the current view settings."""
+    with conn:
+        c.execute(
+            "UPDATE ideas SET status = :status, rank = :rank WHERE id = 0",
+            {"status": status, "rank": rank},
+        )
+
+
 def get_ideas_from_view() -> List[Tuple]:
-    """Fetch ideas from the dynamically created view."""
-    c.execute(
-        "SELECT name, rank, status, added, reviewed, id, position FROM idea_positions"
-    )
+    """
+    Fetch filtered ideas based on the current view settings.
+
+    Returns:
+        List[Tuple]: Filtered list of ideas.
+    """
+    # Get current view settings
+    current_status, current_rank = get_view_settings()
+
+    # Determine filters
+    where_clauses = ["id > 0"]  # Always skip row 0
+
+    # Add status filter if applicable
+    if (
+        current_status is not None and current_status < 6
+    ):  # Apply filter only if status < 6
+        if current_status // 3 == 0:
+            where_clauses.append(f"status = {current_status % 3}")
+        elif current_status // 3 == 1:
+            where_clauses.append(f"status != {current_status % 3}")
+
+    # Add rank filter if applicable
+    if current_status is not None and current_rank < 8:  # Apply filter only if rank < 8
+        if current_rank // 4 == 0:
+            where_clauses.append(f"rank = {current_rank % 4}")
+        elif current_rank // 4 == 1:
+            where_clauses.append(f"rank != {current_rank % 4}")
+
+    # Build the WHERE clause
+    where_clause = " AND ".join(where_clauses)
+
+    # Fetch ideas based on filters
+    query = f"""
+        SELECT id, name, rank, status, added, reviewed, position
+        FROM idea_positions
+        WHERE {where_clause}
+    """
+    c.execute(query)
     return c.fetchall()
 
 
-def insert_idea(
-    name: str,
-    content: str = "",
-    rank: int = 0,
-    status: int = 1,
-    added: int = timestamp(),
-    reviewed: int = timestamp(),
-):
-    """Insert a new idea into the database."""
-    reviewed = (
-        reviewed if reviewed is not None else added
-    )  # Default reviewed to added if not provided
-    with conn:
-        c.execute(
-            """INSERT INTO ideas (name, content, rank, status, added, reviewed)
-               VALUES (:name, :content, :rank, :status, :added, :reviewed)""",
-            {
-                "name": name,
-                "content": content,
-                "rank": rank,
-                "status": status,
-                "added": added,
-                "reviewed": reviewed,
-            },
-        )
+# def get_id_from_position(position: int) -> int:
+#     """Get the ID of the idea at the specified position in the current view."""
+#     # Query the view for the corresponding ID
+#     c.execute(
+#         "SELECT id FROM idea_positions WHERE position = :position",
+#         {"position": position},
+#     )
+#     result = c.fetchone()
+#     print(f"{result = }")
+#     if result:
+#         return result[0]  # Return the ID
+#     raise ValueError(f"No idea found at position {position}.")
+
+
+def get_id_from_position(position: int) -> int:
+    """Get the ID of the idea at the specified position in the current view."""
+    c.execute(
+        "SELECT position, id FROM idea_positions WHERE position = :position",
+        {"position": position},
+    )
+    result = c.fetchone()
+
+    # Log the mapping for debugging
+    with open("debug.log", "a") as debug_file:
+        click.echo(f"Looking up position: {position}", file=debug_file)
+        c.execute("SELECT position, id FROM idea_positions")
+        rows = c.fetchall()
+        for row in rows:
+            click.echo(f"View Row - Position: {row[0]}, ID: {row[1]}", file=debug_file)
+
+    if result:
+        return result[1]  # Return the ID
+    raise ValueError(f"No idea found at position {position}.")
 
 
 def insert_idea(
@@ -103,16 +184,16 @@ def insert_idea(
     reviewed = reviewed if reviewed is not None else added
 
     # Determine the next position
-    c.execute("SELECT MAX(position) FROM ideas")
-    max_position = c.fetchone()[0]
-    position = (max_position + 1) if max_position is not None else 1
+    # c.execute("SELECT MAX(position) FROM ideas")
+    # max_position = c.fetchone()[0]
+    # position = (max_position + 1) if max_position is not None else 1
 
     with conn:
         c.execute(
-            """INSERT INTO ideas (position, name, content, rank, status, added, reviewed)
-               VALUES (:position, :name, :content, :rank, :status, :added, :reviewed)""",
+            """INSERT INTO ideas (name, content, rank, status, added, reviewed)
+               VALUES (:name, :content, :rank, :status, :added, :reviewed)""",
             {
-                "position": position,
+                # "position": position,
                 "name": name,
                 "content": content,
                 "rank": rank,
@@ -134,42 +215,33 @@ def insert_idea(
 
 
 def get_idea_by_position(position: int):
+    try:
+        # Get the ID from the position
+        idea_id = get_id_from_position(position)
+    except ValueError as e:
+        click.echo(str(e))
+        return
+
     c.execute(
-        "SELECT name, rank, status, added, reviewed, content FROM ideas WHERE position=:position",
-        {"position": position},
+        f"""SELECT id, name, rank, status, added, reviewed, content 
+        FROM ideas 
+        WHERE id={idea_id}"""
     )
-    result = c.fetchone()
-    if result:
-        name, rank, status, added, reviewed, content = result
-        return {
-            "name": name,
-            "rank": rank,
-            "status": status,
-            "added": added,
-            "reviewed": reviewed,
-            "content": content,
-        }
-    else:
-        return None  # Return None if no matching record is found
+    return c.fetchone()
 
 
-def delete_idea(position):
-    c.execute("select count(*) from ideas")
-    count = c.fetchone()[0]
+def delete_idea(position: int):
+    """Delete an idea by its position in the current view."""
+    try:
+        # Get the ID from the position
+        idea_id = get_id_from_position(position)
+    except ValueError as e:
+        click.echo(str(e))
+        return
 
+    # Delete the idea by ID
     with conn:
-        c.execute("DELETE from ideas WHERE position=:position", {"position": position})
-        for pos in range(position + 1, count):
-            change_position(pos, pos - 1, False)
-
-
-def change_position(old_position: int, new_position: int, commit=True):
-    c.execute(
-        "UPDATE ideas SET position = :position_new WHERE position = :position_old",
-        {"position_old": old_position, "position_new": new_position},
-    )
-    if commit:
-        conn.commit()
+        c.execute("DELETE FROM ideas WHERE id = :id", {"id": idea_id})
 
 
 def update_idea(
@@ -207,8 +279,15 @@ def update_idea(
 
 
 def review_idea(position: int):
+    try:
+        # Get the ID from the position
+        idea_id = get_id_from_position(position)
+    except ValueError as e:
+        click.echo(str(e))
+        return
+
     with conn:
         c.execute(
-            "UPDATE ideas SET reviewed = :reviewed WHERE position = :position",
-            {"position": position, "reviewed": timestamp()},
+            "UPDATE ideas SET reviewed = :reviewed WHERE id = :id",
+            {"id": idea_id, "reviewed": timestamp()},
         )

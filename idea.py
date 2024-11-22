@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 import json
+import logging
 
 # import os
 import shlex
@@ -12,19 +13,31 @@ from click_shell import shell
 # from prompt_toolkit.styles.named_colors import NAMED_COLORS
 from rich import box, print
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
-from rich.traceback import install
 
-install(show_locals=True, max_frames=4)
+# from rich.traceback import install
+
+# install(show_locals=True, max_frames=4)
+
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+)
+
+log = logging.getLogger("rich")
 
 from database import (
     create_view,
     delete_idea,
+    get_idea_by_position,
     get_ideas_from_view,
+    get_view_settings,
     insert_idea,
     review_idea,
+    set_view_settings,
     update_idea,
 )
 from model import format_datetime, format_timedelta, timestamp
@@ -90,6 +103,7 @@ def process_batch_file(file_path):
                     )
                 except Exception as e:
                     console.print(f"[red]Unexpected error: {e}[/red]")
+                    console.print(f"Executing command: {command = }; {args = }")
                 # finally:
                 #     console.print(f"Executing command: {command = }; {args = }")
                 #     sys.exit()
@@ -115,12 +129,6 @@ def add(name, content, rank, status):
     print(
         f"Adding idea with name: {name}, content: {content}, rank: {rank}, status: {status}"
     )
-    # idea = Idea(
-    #     name,
-    #     content,
-    #     rank_str_to_pos[rank] if rank is not None else None,
-    #     status_str_to_pos[status] if status is not None else None,
-    # )
     insert_idea(
         name,
         content,
@@ -130,13 +138,83 @@ def add(name, content, rank, status):
     _list_all()
 
 
+@cli.command(short_help="Updates data for idea")
+@click.argument("position", type=int)
+@click.option("--name")
+@click.option("--content", type=str, help="Content of the idea")
+@click.option(
+    "--rank",
+    type=click.Choice([r for r in rank_names]),
+    default=rank_names[0],
+    help="Rank of the idea",
+)
+@click.option(
+    "--status",
+    type=click.Choice([s for s in status_names]),
+    default=status_names[1],
+    help="Status of the idea",
+)
+def update(
+    position: int,
+    name: str = "",
+    content: str = "",
+    status: int = None,
+    rank: int = None,
+):
+    """Update data for idea at POSITION."""
+    # Print debug information
+    click.echo(f"Review idea at position {position}")
+    # Call the database function to handle the deletion
+    update_idea(position, name, content, rank, status)
+    # Refresh the list to reflect changes
+    _list_all()
+
+
+@cli.command(short_help="Sets reviewed timestamp for idea")
+@click.argument("position", type=int)
+def review(position):
+    """Review idea at POSITION."""
+    # Print debug information
+    click.echo(f"Review idea at position {position}")
+    # Call the database function to handle the deletion
+    review_idea(position)
+    # Refresh the list to reflect changes
+    _list_all()
+
+
 @cli.command(short_help="Deletes an idea")
 @click.argument("position", type=int)
 def delete(position):
     """Delete an idea at POSITION."""
-    print(f"Deleting idea at position {position}")
-    delete_idea(position - 1)
+    # Print debug information
+    click.echo(f"Deleting idea at position {position}")
+    # Call the database function to handle the deletion
+    delete_idea(position)
+    # Refresh the list to reflect changes
     _list_all()
+
+
+@cli.command()
+@click.option(
+    "--status",
+    type=int,
+    help="i=0,1,2: only show items with status i;\ni=3,4,5: hide items with status i-3",
+)
+@click.option(
+    "--rank",
+    type=int,
+    help="i=0,1,2,3: only show items with rank i;\ni=4,5,6,7: hide items with rank i-4",
+)
+def view(status: int = None, rank: int = None):
+    """Set or restore view filters."""
+    current_status, current_rank = get_view_settings()
+    # Update settings based on user input
+    if status is not None:
+        current_status = status
+    if rank is not None:
+        current_rank = rank
+    set_view_settings(current_status, current_rank)
+    click.echo(f"View settings updated: status={current_status}, rank={current_rank}")
 
 
 @cli.command(short_help="Lists ideas")
@@ -144,85 +222,13 @@ def list():
     _list_all()
 
 
-# def _list_all(view: str = "id"):
-#     """List all ideas, ordered by the specified view column."""
-#     # Dynamically create the view
-#     create_view(order_by_column=view)
-#
-#     # Fetch ideas from the dynamically created view
-#     ideas = get_ideas_from_view()
-#
-#     # Render the table
-#     console.clear()
-#     console.print(" 💡[#87CEFA]Ideas[/#87CEFA]")
-#     table = Table(
-#         show_header=True, header_style="bold blue", expand=True, box=box.HEAVY_EDGE
-#     )
-#     table.add_column("#", style="dim", min_width=1, justify="right")
-#     table.add_column("Name", min_width=24)
-#     table.add_column("Rank", width=7, justify="center")
-#     table.add_column("Status", width=7, justify="center")
-#
-#     for idea in ideas:
-#         name, rank, status, added, reviewed, id_, position = (
-#             idea  # Unpack tuple from view
-#         )
-#         table.add_row(
-#             str(position),
-#             name,
-#             f"[{rank_colors[rank]}]{rank_pos_to_str[rank]}",
-#             f"[{status_colors[status]}]{status_pos_to_str[status]}",
-#         )
-#     console.print(table)
-#
-#     # Optionally return position-to-id mapping if needed for subsequent operations
-#     return {idea[0]: idea[1] for idea in ideas}  # {position: id}
-#
-#
-# def _list_all(view: str = "id") -> dict:
-#     """List all ideas ordered by the specified column and return position-to-id mapping."""
-#     create_view(order_by_column=view)  # Dynamically create the view
-#     ideas = get_ideas_from_view()  # Fetch data from the view
-#
-#     # Create a position-to-id mapping
-#     position_to_id = {idea[0]: idea[1] for idea in ideas}  # {position: id}
-#
-#     # Render the table
-#     console.clear()
-#     console.print(" 💡[#87CEFA]IdeaNursery[/#87CEFA]")
-#     table = Table(
-#         show_header=True, header_style="bold blue", expand=True, box=box.HEAVY_EDGE
-#     )
-#     table.add_column("#", style="dim", min_width=1, justify="right")
-#     table.add_column("Name", min_width=24)
-#     table.add_column("Rank", width=7, justify="center")
-#     table.add_column("Status", width=7, justify="center")
-#
-#     for idea in ideas:
-#         position, id_, name, rank, status, added, reviewed = idea
-#         table.add_row(
-#             str(position),
-#             name,
-#             f"[{rank_colors[rank]}]{rank_pos_to_str[rank]}",
-#             f"[{status_colors[status]}]{status_pos_to_str[status]}",
-#         )
-#     console.print(table)
-#
-#     # Return the mapping for further use
-#     return position_to_id
-
-
-def _list_all(view: str = "id") -> dict:
-    """List all ideas ordered by the specified column and save position-to-id mapping."""
-    create_view(order_by_column=view)  # Dynamically create the view
-    ideas = get_ideas_from_view()  # Fetch data from the view
-
-    console.print(ideas)
-    # Create and save the position-to-id mapping
-    position_to_id = {idea[-1]: idea[-2] for idea in ideas}  # {position: id}
-    save_position_to_id(position_to_id)
-    console.print(position_to_id)
-    # sys.exit()
+def _list_all():
+    """List all ideas based on the current view settings."""
+    # Fetch filtered ideas
+    ideas = get_ideas_from_view()
+    with open("debug.log", "a") as debug_file:
+        click.echo(f"ideas from view: {ideas}", file=debug_file)
+    # log.info(f"{ideas}")
 
     # Render the table
     console.clear()
@@ -235,17 +241,15 @@ def _list_all(view: str = "id") -> dict:
     table.add_column("Rank", width=7, justify="center")
     table.add_column("Status", width=7, justify="center")
 
-    for idea in ideas:
-        name, rank, status, added, reviewed, id_, position = idea
+    for idx, idea in enumerate(ideas, start=1):
+        id_, name, rank, status, added_, reviewed_, position_ = idea
         table.add_row(
-            str(position),
+            str(idx),
             name,
             f"[{rank_colors[rank]}]{rank_pos_to_str[rank]}",
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
         )
     console.print(table)
-
-    return position_to_id
 
 
 @cli.command(short_help="Shows details for idea")
@@ -254,31 +258,28 @@ def details(position):
     """Show details for idea at POSITION."""
     now = timestamp()
     console.clear()
-    hsh = get_idea_by_position(position - 1)
+    idea = get_idea_by_position(position)
+    with open("debug.log", "a") as debug_file:
+        click.echo(f"idea from position: {idea}", file=debug_file)
 
-    if hsh:
-        rank = hsh.get("rank")
-        rank_str = f"{rank:<12} {rank_pos_to_str[rank]:<10}" if rank is not None else ""
-        status = hsh.get("status")
+    if idea:
+        id, name, rank, status, added, reviewed, content = idea
+        rank_str = f"{rank:<14} ({rank_pos_to_str[rank]})" if rank is not None else ""
         status_str = (
-            f"{status:<12} {status_str_to_pos[status]:<10}"
-            if status is not None
-            else ""
+            f"{status:<14} ({status_pos_to_str[status]})" if status is not None else ""
         )
-        added = hsh.get("added")
         added_str = (
-            f"{added:<12} {format_timedelta(now - added, short=False):<10} {format_datetime(added)}"
+            f"{added:<14} ({format_timedelta(now - added, short=False)} ago at {format_datetime(added)})"
             if added is not None
             else ""
         )
-        reviewed = hsh.get("reviewed")
         reviewed_str = (
-            f"{reviewed:<12} {format_timedelta(now - reviewed, short=False):<10} {format_datetime(reviewed)}"
+            f"{reviewed:<14} ({format_timedelta(now - reviewed, short=False)} ago at {format_datetime(reviewed)})"
             if reviewed is not None
             else ""
         )
         meta = f"""\
-field        stored         presented 
+name:      {name}
 rank:      {rank_str}  
 status:    {status_str}    
 added:     {added_str}  
@@ -286,13 +287,11 @@ reviewed:  {reviewed_str}\
 """
 
         res = f"""\
-# {hsh['name']}
-
-{hsh['content']}
+{content}\
 """
-        console.print(Panel(meta, title="metadata"))
-        md = Markdown(res)
-        console.print(Panel(md, title="name and content as markdown"))
+        console.print(Panel(meta, title="data"))
+        # md = Markdown(res)
+        console.print(Panel(res, title="content"))
     else:
         console.print(f"[red]Idea at position {position} not found![/red]")
 
