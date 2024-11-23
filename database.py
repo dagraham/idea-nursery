@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 
 import click
 
-from model import timestamp
+from model import click_log, timestamp
 
 conn = sqlite3.connect("ideas.db")
 c = conn.cursor()
@@ -251,10 +251,16 @@ def update_idea(
     rank: Optional[int] = None,
     status: Optional[int] = None,
 ):
+    try:
+        # Get the ID from the position
+        idea_id = get_id_from_position(position)
+    except ValueError as e:
+        click.echo(str(e))
+        return
     # Build the base query and parameters
     base_query = "UPDATE ideas SET "
-    updates = []
-    params = {"position": position, "reviewed": timestamp()}
+    updates = ["reviewed = :reviewed"]
+    params = {"id": idea_id, "reviewed": timestamp()}
 
     # Append non-None fields to the updates list and params dict
     if name is not None:
@@ -271,9 +277,10 @@ def update_idea(
         params["status"] = status
 
     # Join updates to form the full query and add the WHERE clause
-    query = f"{base_query} {', '.join(updates)}, reviewed = :reviewed WHERE position = :position"
+    query = f"{base_query} {', '.join(updates)} WHERE id = :id"
 
     # Execute the query with the parameters
+    click_log(f"{query =}; {params = }")
     with conn:
         c.execute(query, params)
 

@@ -29,6 +29,7 @@ logging.basicConfig(
 
 log = logging.getLogger("rich")
 
+
 from database import (
     create_view,
     delete_idea,
@@ -40,7 +41,13 @@ from database import (
     set_view_settings,
     update_idea,
 )
-from model import format_datetime, format_timedelta, timestamp
+from model import (
+    click_log,
+    edit_content_with_nvim,
+    format_datetime,
+    format_timedelta,
+    timestamp,
+)
 
 rank_names = ["spark", "inkling", "thought", "idea"]
 rank_colors = ["#6495ed", "#87CEFA", "#adff2f", "#ffff00"]
@@ -156,16 +163,22 @@ def add(name, content, rank, status):
 )
 def update(
     position: int,
-    name: str = "",
-    content: str = "",
+    name: str = None,
+    content: str = None,
     status: int = None,
     rank: int = None,
 ):
     """Update data for idea at POSITION."""
     # Print debug information
-    click.echo(f"Review idea at position {position}")
+    click.echo(f"Update idea at position {position}")
     # Call the database function to handle the deletion
-    update_idea(position, name, content, rank, status)
+    update_idea(
+        position,
+        name,
+        content,
+        rank_str_to_pos[rank] if rank is not None else None,
+        status_str_to_pos[status] if status is not None else None,
+    )
     # Refresh the list to reflect changes
     _list_all()
 
@@ -232,14 +245,16 @@ def _list_all():
 
     # Render the table
     console.clear()
-    console.print(" 💡[#87CEFA]IdeaNursery[/#87CEFA]")
+    console.print(" 💡[#87CEFA]Idea Nursery[/#87CEFA]")
     table = Table(
         show_header=True, header_style="bold blue", expand=True, box=box.HEAVY_EDGE
     )
     table.add_column("#", style="dim", min_width=1, justify="right")
-    table.add_column("Name", min_width=24)
-    table.add_column("Rank", width=7, justify="center")
-    table.add_column("Status", width=7, justify="center")
+    table.add_column("name", min_width=24)
+    table.add_column("rank", width=7, justify="center")
+    table.add_column("status", width=7, justify="center")
+    table.add_column("age", width=4, justify="center")
+    table.add_column("idle", width=4, justify="center")
 
     for idx, idea in enumerate(ideas, start=1):
         id_, name, rank, status, added_, reviewed_, position_ = idea
@@ -248,6 +263,8 @@ def _list_all():
             name,
             f"[{rank_colors[rank]}]{rank_pos_to_str[rank]}",
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
+            f"{format_timedelta(timestamp() - added_)}",
+            f"{format_timedelta(timestamp() - reviewed_)}",
         )
     console.print(table)
 
@@ -294,6 +311,21 @@ reviewed:  {reviewed_str}\
         console.print(Panel(res, title="content"))
     else:
         console.print(f"[red]Idea at position {position} not found![/red]")
+
+
+@cli.command(short_help="Edit content for idea in nvim")
+@click.argument("position", type=int)
+def edit(position):
+    """Show details for idea at POSITION."""
+    now = timestamp()
+    console.clear()
+    idea = get_idea_by_position(position)
+    click_log(f"starting with {idea = }")
+    if idea:
+        id, name, rank, status, added_, reviewed_, content = idea
+        new_content = edit_content_with_nvim(content)
+        click_log(f"{id=}, {new_content = }")
+        update_idea(id, None, new_content, None, None)
 
 
 def main():
