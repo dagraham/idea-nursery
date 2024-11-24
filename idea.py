@@ -18,18 +18,6 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-# from rich.traceback import install
-
-# install(show_locals=True, max_frames=4)
-
-FORMAT = "%(message)s"
-logging.basicConfig(
-    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
-)
-
-log = logging.getLogger("rich")
-
-
 from database import (
     create_view,
     delete_idea,
@@ -49,17 +37,42 @@ from model import (
     timestamp,
 )
 
-rank_names = ["spark", "inkling", "thought", "idea"]
+# from rich.traceback import install
+
+# install(show_locals=True, max_frames=4)
+
+# FORMAT = "%(message)s"
+# logging.basicConfig(
+#     level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+# )
+#
+# log = logging.getLogger("rich")
+#
+
+
+rank_names = ["thought", "kernel", "strategy", "keeper"]
 rank_colors = ["#6495ed", "#87CEFA", "#adff2f", "#ffff00"]
 rank_pos_to_str = {pos: value for pos, value in enumerate(rank_names)}
 rank_str_to_pos = {value: pos for pos, value in enumerate(rank_names)}
 valid_rank = [i for i in range(len(rank_names))]
+rank_filters = (
+    [f"+{name}" for name in rank_names]
+    + [f"-{name}" for name in rank_names]
+    + ["clear"]
+)
+rank_filter_to_pos = {value: pos for pos, value in enumerate(rank_filters)}
 
 status_names = ["shelved", "nursery", "library"]
 status_colors = ["#4775e6", "#ffa500", "#32CD32"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
 valid_status = [i for i in range(len(status_names))]
+status_filters = (
+    [f"+{name}" for name in status_names]
+    + [f"-{name}" for name in status_names]
+    + ["clear"]
+)
+status_filter_to_pos = {value: pos for pos, value in enumerate(status_filters)}
 
 console = Console()
 
@@ -207,27 +220,29 @@ def delete(position):
     _list_all()
 
 
-@cli.command()
-@click.option(
-    "--status",
-    type=int,
-    help="i=0,1,2: only show items with status i;\ni=3,4,5: hide items with status i-3",
-)
+@cli.command(short_help="Focus on ideas based on their rank and status properties")
 @click.option(
     "--rank",
-    type=int,
-    help="i=0,1,2,3: only show items with rank i;\ni=4,5,6,7: hide items with rank i-4",
+    type=click.Choice([r for r in rank_filters]),
+    help=f"With, e.g., '+{rank_names[0]}' only show ideas with rank '{rank_names[0]}'. With '-{rank_names[0]}' only show ideas that do NOT have rank '{rank_names[0]}'. 'clear' removes the rank focus.",
 )
-def view(status: int = None, rank: int = None):
+@click.option(
+    "--status",
+    type=click.Choice([s for s in status_filters]),
+    help=f"With, e.g., '+{status_names[0]}' only show ideas with status '{status_names[0]}'. With '-{status_names[0]}' only show ideas that do NOT have status '{status_names[0]}'. 'clear' removes the status focus.",
+)
+def focus(status: str = None, rank: str = None):
     """Set or restore view filters."""
     current_status, current_rank = get_view_settings()
     # Update settings based on user input
+
     if status is not None:
-        current_status = status
+        current_status = status_filter_to_pos[status]
     if rank is not None:
-        current_rank = rank
+        current_rank = rank_filter_to_pos[rank]
     set_view_settings(current_status, current_rank)
     click.echo(f"View settings updated: status={current_status}, rank={current_rank}")
+    _list_all()
 
 
 @cli.command(short_help="Lists ideas")
