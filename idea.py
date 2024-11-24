@@ -50,17 +50,18 @@ from model import (
 #
 
 
-rank_names = ["thought", "kernel", "strategy", "keeper"]
-rank_colors = ["#6495ed", "#87CEFA", "#adff2f", "#ffff00"]
-rank_pos_to_str = {pos: value for pos, value in enumerate(rank_names)}
-rank_str_to_pos = {value: pos for pos, value in enumerate(rank_names)}
-valid_rank = [i for i in range(len(rank_names))]
-rank_filters = (
-    [f"+{name}" for name in rank_names]
-    + [f"-{name}" for name in rank_names]
+stage_names = ["thought", "kernel", "strategy", "keeper"]
+stage_colors = ["#6495ed", "#87CEFA", "#adff2f", "#ffff00"]
+stage_pos_to_str = {pos: value for pos, value in enumerate(stage_names)}
+stage_str_to_pos = {value: pos for pos, value in enumerate(stage_names)}
+valid_stage = [i for i in range(len(stage_names))]
+stage_filters = (
+    [f"+{name}" for name in stage_names]
+    + [f"-{name}" for name in stage_names]
     + ["clear"]
 )
-rank_filter_to_pos = {value: pos for pos, value in enumerate(rank_filters)}
+stage_filter_to_pos = {value: pos for pos, value in enumerate(stage_filters)}
+stage_pos_to_filter = {pos: value for pos, value in enumerate(stage_filters)}
 
 status_names = ["shelved", "nursery", "library"]
 status_colors = ["#4775e6", "#ffa500", "#32CD32"]
@@ -73,6 +74,7 @@ status_filters = (
     + ["clear"]
 )
 status_filter_to_pos = {value: pos for pos, value in enumerate(status_filters)}
+status_pos_to_filter = {pos: value for pos, value in enumerate(status_filters)}
 
 console = Console()
 
@@ -133,10 +135,10 @@ def process_batch_file(file_path):
 @click.argument("name")
 @click.option("--content", type=str, help="Content of the idea")
 @click.option(
-    "--rank",
-    type=click.Choice([r for r in rank_names]),
-    default=rank_names[0],
-    help="Rank of the idea",
+    "--stage",
+    type=click.Choice([r for r in stage_names]),
+    default=stage_names[0],
+    help="Stage of the idea",
 )
 @click.option(
     "--status",
@@ -144,15 +146,15 @@ def process_batch_file(file_path):
     default=status_names[1],
     help="Status of the idea",
 )
-def add(name, content, rank, status):
-    """Add a new idea with NAME, CONTENT, RANK, and STATUS."""
+def add(name, content, stage, status):
+    """Add a new idea with NAME, CONTENT, STAGE, and STATUS."""
     print(
-        f"Adding idea with name: {name}, content: {content}, rank: {rank}, status: {status}"
+        f"Adding idea with name: {name}, content: {content}, stage: {stage}, status: {status}"
     )
     insert_idea(
         name,
         content,
-        rank_str_to_pos[rank] if rank is not None else 0,
+        stage_str_to_pos[stage] if stage is not None else 0,
         status_str_to_pos[status] if status is not None else 1,
     )
     _list_all()
@@ -163,10 +165,10 @@ def add(name, content, rank, status):
 @click.option("--name")
 @click.option("--content", type=str, help="Content of the idea")
 @click.option(
-    "--rank",
-    type=click.Choice([r for r in rank_names]),
-    default=rank_names[0],
-    help="Rank of the idea",
+    "--stage",
+    type=click.Choice([r for r in stage_names]),
+    default=stage_names[0],
+    help="Stage of the idea",
 )
 @click.option(
     "--status",
@@ -179,9 +181,9 @@ def update(
     name: str = None,
     content: str = None,
     status: int = None,
-    rank: int = None,
+    stage: int = None,
 ):
-    """Update data for idea at POSITION."""
+    """Update NAME, CONTENT, STAGE, and/or STATUS for idea at POSITION."""
     # Print debug information
     click.echo(f"Update idea at position {position}")
     # Call the database function to handle the deletion
@@ -189,7 +191,7 @@ def update(
         position,
         name,
         content,
-        rank_str_to_pos[rank] if rank is not None else None,
+        stage_str_to_pos[stage] if stage is not None else None,
         status_str_to_pos[status] if status is not None else None,
     )
     # Refresh the list to reflect changes
@@ -220,63 +222,82 @@ def delete(position):
     _list_all()
 
 
-@cli.command(short_help="Focus on ideas based on their rank and status properties")
+@cli.command(short_help="Focus on ideas based on their stage and status properties")
 @click.option(
-    "--rank",
-    type=click.Choice([r for r in rank_filters]),
-    help=f"With, e.g., '+{rank_names[0]}' only show ideas with rank '{rank_names[0]}'. With '-{rank_names[0]}' only show ideas that do NOT have rank '{rank_names[0]}'. 'clear' removes the rank focus.",
+    "--stage",
+    type=click.Choice([r for r in stage_filters]),
+    help=f"With, e.g., '+{stage_names[0]}' only show ideas with stage '{stage_names[0]}'. With '-{stage_names[0]}' only show ideas that do NOT have stage '{stage_names[0]}'. 'clear' removes the stage focus.",
 )
 @click.option(
     "--status",
     type=click.Choice([s for s in status_filters]),
     help=f"With, e.g., '+{status_names[0]}' only show ideas with status '{status_names[0]}'. With '-{status_names[0]}' only show ideas that do NOT have status '{status_names[0]}'. 'clear' removes the status focus.",
 )
-def focus(status: str = None, rank: str = None):
-    """Set or restore view filters."""
-    current_status, current_rank = get_view_settings()
+def focus(status: str = None, stage: str = None):
+    """Set or clear focus."""
+    current_status, current_stage = get_view_settings()
     # Update settings based on user input
 
     if status is not None:
         current_status = status_filter_to_pos[status]
-    if rank is not None:
-        current_rank = rank_filter_to_pos[rank]
-    set_view_settings(current_status, current_rank)
-    click.echo(f"View settings updated: status={current_status}, rank={current_rank}")
+    if stage is not None:
+        current_stage = stage_filter_to_pos[stage]
+    set_view_settings(current_status, current_stage)
+    click.echo(f"View settings updated: status={current_status}, stage={current_stage}")
     _list_all()
 
 
 @cli.command(short_help="Lists ideas")
 def list():
+    """List all ideas based on the current focus settings."""
     _list_all()
 
 
 def _list_all():
     """List all ideas based on the current view settings."""
     # Fetch filtered ideas
-    ideas = get_ideas_from_view()
+    ideas, current_status, current_stage = get_ideas_from_view()
+    caption_elements = []
+    if int(current_status) < len(status_pos_to_filter.keys()) - 1:
+        caption_elements.append(f"--status {status_pos_to_filter.get(current_status)}")
+    if int(current_stage) < len(stage_pos_to_filter.keys()) - 1:
+        caption_elements.append(f"--stage {stage_pos_to_filter.get(current_stage)}")
+
+    caption = ""
+    if caption_elements:
+        caption = f"focus {' '.join(caption_elements)}"
+
+    # ideas = get_ideas_from_view()
     with open("debug.log", "a") as debug_file:
-        click.echo(f"ideas from view: {ideas}", file=debug_file)
+        click.echo(
+            f"ideas from view: {ideas}; {current_status = };  {current_stage = }; {caption = }",
+            file=debug_file,
+        )
     # log.info(f"{ideas}")
 
     # Render the table
     console.clear()
     console.print(" 💡[#87CEFA]Idea Nursery[/#87CEFA]")
     table = Table(
-        show_header=True, header_style="bold blue", expand=True, box=box.HEAVY_EDGE
+        show_header=True,
+        header_style="bold blue",
+        expand=True,
+        box=box.HEAVY_EDGE,
+        caption=caption,
     )
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("name", min_width=24)
-    table.add_column("rank", width=7, justify="center")
+    table.add_column("stage", width=7, justify="center")
     table.add_column("status", width=7, justify="center")
     table.add_column("age", width=4, justify="center")
     table.add_column("idle", width=4, justify="center")
 
     for idx, idea in enumerate(ideas, start=1):
-        id_, name, rank, status, added_, reviewed_, position_ = idea
+        id_, name, stage, status, added_, reviewed_, position_ = idea
         table.add_row(
             str(idx),
             name,
-            f"[{rank_colors[rank]}]{rank_pos_to_str[rank]}",
+            f"[{stage_colors[stage]}]{stage_pos_to_str[stage]}",
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
             f"{format_timedelta(timestamp() - added_)}",
             f"{format_timedelta(timestamp() - reviewed_)}",
@@ -295,8 +316,10 @@ def details(position):
         click.echo(f"idea from position: {idea}", file=debug_file)
 
     if idea:
-        id, name, rank, status, added, reviewed, content = idea
-        rank_str = f"{rank:<14} ({rank_pos_to_str[rank]})" if rank is not None else ""
+        id, name, stage, status, added, reviewed, content = idea
+        stage_str = (
+            f"{stage:<14} ({stage_pos_to_str[stage]})" if stage is not None else ""
+        )
         status_str = (
             f"{status:<14} ({status_pos_to_str[status]})" if status is not None else ""
         )
@@ -312,7 +335,7 @@ def details(position):
         )
         meta = f"""\
 name:      {name}
-rank:      {rank_str}  
+stage:      {stage_str}  
 status:    {status_str}    
 added:     {added_str}  
 reviewed:  {reviewed_str}\
@@ -337,7 +360,7 @@ def edit(position):
     idea = get_idea_by_position(position)
     click_log(f"starting with {idea = }")
     if idea:
-        id, name, rank, status, added_, reviewed_, content = idea
+        id, name, stage, status, added_, reviewed_, content = idea
         new_content = edit_content_with_nvim(content)
         click_log(f"{id=}, {new_content = }")
         update_idea(id, None, new_content, None, None)

@@ -103,7 +103,7 @@ def get_ideas_from_view() -> List[Tuple]:
         List[Tuple]: Filtered list of ideas.
     """
     # Get current view settings
-    current_status, current_rank = get_view_settings()
+    current_status, current_stage = get_view_settings()
 
     # Determine filters
     where_clauses = ["id > 0"]  # Always skip row 0
@@ -118,11 +118,13 @@ def get_ideas_from_view() -> List[Tuple]:
             where_clauses.append(f"status != {current_status % 3}")
 
     # Add rank filter if applicable
-    if current_status is not None and current_rank < 8:  # Apply filter only if rank < 8
-        if current_rank // 4 == 0:
-            where_clauses.append(f"rank = {current_rank % 4}")
-        elif current_rank // 4 == 1:
-            where_clauses.append(f"rank != {current_rank % 4}")
+    if (
+        current_status is not None and current_stage < 8
+    ):  # Apply filter only if rank < 8
+        if current_stage // 4 == 0:
+            where_clauses.append(f"rank = {current_stage % 4}")
+        elif current_stage // 4 == 1:
+            where_clauses.append(f"rank != {current_stage % 4}")
 
     # Build the WHERE clause
     where_clause = " AND ".join(where_clauses)
@@ -134,21 +136,8 @@ def get_ideas_from_view() -> List[Tuple]:
         WHERE {where_clause}
     """
     c.execute(query)
-    return c.fetchall()
-
-
-# def get_id_from_position(position: int) -> int:
-#     """Get the ID of the idea at the specified position in the current view."""
-#     # Query the view for the corresponding ID
-#     c.execute(
-#         "SELECT id FROM idea_positions WHERE position = :position",
-#         {"position": position},
-#     )
-#     result = c.fetchone()
-#     print(f"{result = }")
-#     if result:
-#         return result[0]  # Return the ID
-#     raise ValueError(f"No idea found at position {position}.")
+    return c.fetchall(), current_status, current_stage
+    # return c.fetchall()
 
 
 def get_id_from_position(position: int) -> int:
@@ -202,16 +191,6 @@ def insert_idea(
                 "reviewed": reviewed,
             },
         )
-
-
-# def get_all_ideas() -> List[Idea]:
-#     c.execute("select * from ideas")
-#     results = c.fetchall()
-#     ideas = []
-#     for result in results:
-#         ideas.append(Idea(*result))
-#     return ideas
-#
 
 
 def get_idea_by_position(position: int):
