@@ -18,7 +18,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from database import (
+from modules.database import (
     create_view,
     delete_idea,
     get_idea_by_position,
@@ -29,7 +29,7 @@ from database import (
     set_view_settings,
     update_idea,
 )
-from model import (
+from modules.model import (
     click_log,
     edit_content_with_nvim,
     format_datetime,
@@ -40,14 +40,6 @@ from model import (
 # from rich.traceback import install
 
 # install(show_locals=True, max_frames=4)
-
-# FORMAT = "%(message)s"
-# logging.basicConfig(
-#     level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
-# )
-#
-# log = logging.getLogger("rich")
-#
 
 
 stage_names = ["thought", "kernel", "strategy", "keeper"]
@@ -63,7 +55,7 @@ stage_filters = (
 stage_filter_to_pos = {value: pos for pos, value in enumerate(stage_filters)}
 stage_pos_to_filter = {pos: value for pos, value in enumerate(stage_filters)}
 
-status_names = ["shelved", "nursery", "library"]
+status_names = ["storage", "nursery", "library"]
 status_colors = ["#4775e6", "#ffa500", "#32CD32"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
@@ -75,6 +67,14 @@ status_filters = (
 )
 status_filter_to_pos = {value: pos for pos, value in enumerate(status_filters)}
 status_pos_to_filter = {pos: value for pos, value in enumerate(status_filters)}
+
+age_alert_seconds = 4 * 60 * 60  # 1 hour
+age_notice_seconds = 2 * 60 * 60  # 30 minutes
+idle_alert_seconds = 30 * 60  # 15
+idle_notice_seconds = 15 * 60  # 30 minutes
+alert_color = "#ff4500"
+notice_color = "#ffa500"
+
 
 console = Console()
 
@@ -203,7 +203,7 @@ def update(
 def review(position):
     """Review idea at POSITION."""
     # Print debug information
-    click.echo(f"Review idea at position {position}")
+    click_log(f"Review idea at position {position}")
     # Call the database function to handle the deletion
     review_idea(position)
     # Refresh the list to reflect changes
@@ -257,6 +257,8 @@ def _list_all():
     """List all ideas based on the current view settings."""
     # Fetch filtered ideas
     ideas, current_status, current_stage = get_ideas_from_view()
+    click_log(f"{ideas = }")
+
     caption_elements = []
     if int(current_status) < len(status_pos_to_filter.keys()) - 1:
         caption_elements.append(f"--status {status_pos_to_filter.get(current_status)}")
@@ -267,12 +269,12 @@ def _list_all():
     if caption_elements:
         caption = f"focus {' '.join(caption_elements)}"
 
-    # ideas = get_ideas_from_view()
-    with open("debug.log", "a") as debug_file:
-        click.echo(
-            f"ideas from view: {ideas}; {current_status = };  {current_stage = }; {caption = }",
-            file=debug_file,
-        )
+    # # ideas = get_ideas_from_view()
+    # with open("debug.log", "a") as debug_file:
+    #     click.echo(
+    #         f"ideas from view: {ideas}; {current_status = };  {current_stage = }; {caption = }",
+    #         file=debug_file,
+    #     )
     # log.info(f"{ideas}")
 
     # Render the table
@@ -299,8 +301,8 @@ def _list_all():
             name,
             f"[{stage_colors[stage]}]{stage_pos_to_str[stage]}",
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
-            f"{format_timedelta(timestamp() - added_)}",
-            f"{format_timedelta(timestamp() - reviewed_)}",
+            f"{format_timedelta(timestamp() - added_, colors=(age_notice_seconds, age_alert_seconds))}",
+            f"{format_timedelta(timestamp() - reviewed_, colors=(idle_notice_seconds, idle_alert_seconds))}",
         )
     console.print(table)
 

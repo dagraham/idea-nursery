@@ -1,23 +1,33 @@
 import datetime
+import inspect
 import os
 import subprocess
 import tempfile
 from enum import Enum
+from typing import Tuple
 
 import click
 
+alert_color = "#ff4500"
+notice_color = "#ffa500"
+
 
 def click_log(msg: str):
-    # pass
+    # Get the name of the calling function
+    caller_name = inspect.stack()[1].function
+
+    # Format the log message
     with open("debug.log", "a") as debug_file:
-        msg = f"\nclick_log {format_datetime(timestamp())}\n{msg}"
+        msg = f"\nclick_log {format_datetime(timestamp())} [{caller_name}]\n{msg}"
         click.echo(
             msg,
             file=debug_file,
         )
 
 
-def format_timedelta(seconds: int, short: bool = True) -> str:
+def format_timedelta(
+    seconds: int, short: bool = True, colors: Tuple[int, int] = (0, 0)
+) -> str:
     if seconds == 0:
         return "0m"
     sign = ""
@@ -47,9 +57,18 @@ def format_timedelta(seconds: int, short: bool = True) -> str:
     if not until:
         until.append("0m")
     if short:
-        return f"{sign}{until[0]}"
+        ret = f"{sign}{until[0]}"
     else:
-        return f"{sign}{''.join(until)}"
+        ret = f"{sign}{''.join(until)}"
+
+    notice_seconds, alert_seconds = colors
+    if alert_seconds > 0 and seconds >= alert_seconds:
+        # apply alert colors
+        ret = f"[{alert_color}]" + ret
+    elif notice_seconds > 0 and seconds >= notice_seconds:
+        ret = f"[{notice_color}]" + ret
+
+    return ret
 
 
 def format_datetime(seconds: int, fmt: str = "%Y-%m-%d %H:%M %Z") -> str:

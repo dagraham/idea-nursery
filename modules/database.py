@@ -1,17 +1,18 @@
-import datetime
+import os
 import sqlite3
-from os import walk
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 import click
 
-from model import click_log, timestamp
+from modules.model import click_log, timestamp
 
 conn = sqlite3.connect("ideas.db")
 c = conn.cursor()
 
 default_rank_setting = 8
 default_status_setting = 6
+pos_to_id = {}
 
 
 def create_table():
@@ -49,13 +50,37 @@ def initialize_settings():
 initialize_settings()
 
 
+# def create_view():
+#     # Validate the column name to prevent SQL injection
+#     # Drop the view if it already exists
+#     c.execute("DROP VIEW IF EXISTS idea_positions")
+#
+#     # Create the SQL query dynamically
+#     query = f"""
+#         CREATE VIEW idea_positions AS
+#         SELECT
+#             name,
+#             rank,
+#             status,
+#             added,
+#             reviewed,
+#             id,
+#             (SELECT COUNT(*)
+#              FROM ideas AS i2
+#              WHERE i2.id < ideas.id) AS position
+#         FROM ideas
+#         ORDER BY status, rank, reviewed, id
+#     """
+#     res = c.execute(query)
+#     click_log(f"idea_positions: {res}")
+
+
 def create_view():
-    # Validate the column name to prevent SQL injection
     # Drop the view if it already exists
     c.execute("DROP VIEW IF EXISTS idea_positions")
 
     # Create the SQL query dynamically
-    query = f"""
+    query = """
         CREATE VIEW idea_positions AS
         SELECT 
             name,
@@ -64,11 +89,8 @@ def create_view():
             added,
             reviewed,
             id,
-            (SELECT COUNT(*)
-             FROM ideas AS i2
-             WHERE i2.id < ideas.id) AS position
+            ROW_NUMBER() OVER (ORDER BY status, rank, reviewed, id) AS position
         FROM ideas
-        ORDER BY status, rank, reviewed, id
     """
     c.execute(query)
 
@@ -136,12 +158,28 @@ def get_ideas_from_view() -> List[Tuple]:
         WHERE {where_clause}
     """
     c.execute(query)
-    return c.fetchall(), current_status, current_stage
+    ideas = c.fetchall()
+    # pos = 0
+    # pos_to_id = {}
+    # for idea in ideas:
+    #     pos += 1
+    #     id = idea[0]
+    #     pos_to_id[pos] = id
+    # click_log(f"{pos_to_id = }")
+    click_log(f"{ideas = }")
+
+    return ideas, current_status, current_stage
     # return c.fetchall()
 
 
 def get_id_from_position(position: int) -> int:
     """Get the ID of the idea at the specified position in the current view."""
+    # id = pos_to_id.get(position)
+    # click_log(f"{position = } -> {id = }")
+    # if id:
+    #     return id
+    # raise ValueError(f"No id corresponding to position {position}")
+
     c.execute(
         "SELECT position, id FROM idea_positions WHERE position = :position",
         {"position": position},
@@ -268,6 +306,7 @@ def review_idea(position: int):
     try:
         # Get the ID from the position
         idea_id = get_id_from_position(position)
+        click_log(f"{position = } -> {idea_id = }")
     except ValueError as e:
         click.echo(str(e))
         return
@@ -277,3 +316,34 @@ def review_idea(position: int):
             "UPDATE ideas SET reviewed = :reviewed WHERE id = :id",
             {"id": idea_id, "reviewed": timestamp()},
         )
+
+
+def backup_with_time_retention(source_db: str, backup_dir: str, days: int = 30):
+    # Ensure backup directory exists
+    os.makedirs(backup_dir, exist_ok=True)
+
+    # Generate backup file name with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file = os.path.join(backup_dir, f"backup_{timestamp}.db")
+
+    # Perform the backup
+    with sqlite3.connect(source_db) as conn:
+        with sqlite3.connect(backup_file) as backup_conn:
+            conn.backup(backup_conn)
+    print(f"Backup created: {backup_file}")
+
+    # Enforce retention: Delete backups older than specified days
+    cutoff_date = datetime.now() - timedelta(days=days)
+    for file in os.listdir(backup_dir):
+        file_path = os.path.join(backup_dir, file)
+        if os.path.isfile(file_path) and file.startswith("backup_"):
+            file_ctime = datetime.fromtimestamp(os.path.getctime(file_path))
+            if file_ctime < cutoff_date:
+                os.remove(file_path)
+                print(f"Deleted old backup: {file_path}")
+
+
+# Example Usage
+source_db_path = "your_database.db"
+backup_directory = "./backups"
+backup_with_time_retention(source_db_path, backup_directory, days=30)

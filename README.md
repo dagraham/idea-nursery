@@ -1,6 +1,6 @@
 # Idea Nursery
 
-The inspiration for *Idea Nusery* came from the realization that, for me at least, the typical though that occurs to me is a very long way from deserving to be called an *idea*. It is more like a seed that might, with sufficient love and care, sprout, become a seedling and eventually become a plant worthy of a place in the garden. What's needed, I thought, is a place to plant the thoughts where they will not be forgotten and where they can be given the attention they need to develop - in short, a nursery for ideas.
+The inspiration for *Idea Nusery* came from the realization that, for me at least, the typical thought that occurs to me is a very long way from deserving to be called an *idea*. It is more like a seed that might, with sufficient love and care, sprout, become a seedling and eventually become a plant worthy of a place in the garden. What's needed, I thought, is a place to plant such thoughts where they will not be forgotten and where they can be given the attention they need to develop - in short, a nursery for ideas.
 
 
 ## Ideas 
