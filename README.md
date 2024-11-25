@@ -13,17 +13,15 @@ A brief, suggestive label
 - description  
 Depends on the stage of developement - utimately a useful description of the idea with tags and links.
 
-- stage of development  
-options:  
+- stage of development
     - thought 
     - kernel 
     - strategy 
     - idea 
     - keeper
 
-- status  
-options:  
-    - shelved - paused for the moment 
+- status
+    - storage - paused for the moment 
     - nursery - where the action occurs 
     - library - the garden for keepers
 
