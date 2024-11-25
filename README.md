@@ -14,6 +14,7 @@ A brief, suggestive label
 Depends on the stage of developement - utimately a useful description of the idea with tags and links.
 
 - stage of development  
+options:
     - thought 
     - kernel 
     - strategy 
@@ -21,6 +22,7 @@ Depends on the stage of developement - utimately a useful description of the ide
     - keeper
 
 - status  
+options:
     - shelved - paused for the moment 
     - nursery - where the action occurs 
     - library - the garden for keepers
