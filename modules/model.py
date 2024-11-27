@@ -8,6 +8,8 @@ from typing import Tuple
 
 import click
 
+from . import backup_dir, db_path, idea_home, log_dir
+
 alert_color = "#ff4500"
 notice_color = "#ffa500"
 
@@ -15,9 +17,11 @@ notice_color = "#ffa500"
 def click_log(msg: str):
     # Get the name of the calling function
     caller_name = inspect.stack()[1].function
+    ts = timestamp()
+    log_name = format_datetime(ts, "%Y-%m-%d.log")
 
     # Format the log message
-    with open("debug.log", "a") as debug_file:
+    with open(os.path.join(log_dir, log_name), "a") as debug_file:
         msg = f"\nclick_log {format_datetime(timestamp())} [{caller_name}]\n{msg}"
         click.echo(
             msg,
@@ -79,37 +83,22 @@ def timestamp() -> int:
     return round(datetime.datetime.now().timestamp())
 
 
-def edit_content_with_nvim(initial_content: str) -> str:
-    try:
-        # Create a temporary file
-        with tempfile.NamedTemporaryFile(
-            suffix=".md", mode="w", delete=False
-        ) as tmp_file:
-            file_name = tmp_file.name
-            # Write the initial content
-            tmp_file.write(initial_content)
-            tmp_file.flush()
+def edit_content_with_nvim(initial_content: str, file_name="edit_session.md"):
+    # Write the content to a temporary file
+    temp_path = f"/tmp/{file_name}"
+    with open(temp_path, "w") as tmp_file:
+        tmp_file.write(initial_content)
 
-        # click_log(f"Temporary file created: {file_name}")
+    # Open the file in nvim
+    subprocess.call(["nvim", temp_path])
 
-        # Open Neovim to edit the file
-        subprocess_return = subprocess.call(["nvim", file_name])
-        # click_log(f"Neovim subprocess finished with return code: {subprocess_return}")
+    # Read the updated content
+    with open(temp_path, "r") as tmp_file:
+        updated_content = tmp_file.read()
 
-        if subprocess_return != 0:
-            raise RuntimeError("Neovim exited with a non-zero status.")
+    # Cleanup
+    os.unlink(temp_path)
 
-        # Reopen the file in read mode to get the updated content
-        with open(file_name, "r") as tmp_file:
-            updated_content = tmp_file.read()
-            # click_log(f"Read updated content: {updated_content}")
+    click_log(f"{updated_content = }")
 
-        # Clean up the temporary file
-        os.unlink(file_name)
-        # click_log(f"Temporary file deleted: {file_name}")
-
-        return updated_content
-
-    except Exception as e:
-        click_log(f"An error occurred: {e}")
-        raise
+    return updated_content

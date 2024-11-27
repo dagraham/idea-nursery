@@ -5,9 +5,9 @@ import logging
 # import os
 import shlex
 import sys
-from pathlib import Path
 
 import click
+from click.testing import CliRunner
 from click_shell import shell
 
 # from prompt_toolkit.styles.named_colors import NAMED_COLORS
@@ -37,13 +37,19 @@ from modules.model import (
     timestamp,
 )
 
+from . import backup_dir, db_path, idea_home, log_dir
+from .__version__ import version
+
+click_log(f"{idea_home = }; {backup_dir = }; {log_dir =}, {db_path = }; {version = }")
+# from pathlib import Path
+
+
 # from rich.traceback import install
 
 # install(show_locals=True, max_frames=4)
 
-
-stage_names = ["thought", "kernel", "strategy", "keeper"]
-stage_colors = ["#6495ed", "#87CEFA", "#adff2f", "#ffff00"]
+stage_names = ["seed", "sprout", "seedling", "plant"]
+stage_colors = ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"]
 stage_pos_to_str = {pos: value for pos, value in enumerate(stage_names)}
 stage_str_to_pos = {value: pos for pos, value in enumerate(stage_names)}
 valid_stage = [i for i in range(len(stage_names))]
@@ -55,8 +61,8 @@ stage_filters = (
 stage_filter_to_pos = {value: pos for pos, value in enumerate(stage_filters)}
 stage_pos_to_filter = {pos: value for pos, value in enumerate(stage_filters)}
 
-status_names = ["storage", "nursery", "library"]
-status_colors = ["#4775e6", "#ffa500", "#32CD32"]
+status_names = ["paused", "active", "available"]
+status_colors = ["#938856", "#c4a72f", "#f5c608"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
 valid_status = [i for i in range(len(status_names))]
@@ -79,56 +85,40 @@ notice_color = "#ffa500"
 console = Console()
 
 
-# Define the path to the temporary JSON file
-TEMP_FILE = Path(".position_to_id.json")
-
-
-def save_position_to_id(position_to_id: dict):
-    """Save the position_to_id mapping to a temporary JSON file."""
-    with open(TEMP_FILE, "w") as f:
-        json.dump(position_to_id, f)
-
-
-def load_position_to_id() -> dict:
-    """Load the position_to_id mapping from the temporary JSON file."""
-    if TEMP_FILE.exists():
-        with open(TEMP_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-
 @shell(prompt="app> ", intro="Welcome to the idea manager shell!")
-@click.option(
-    "-t", "--file", type=click.Path(exists=True), help="Batch file with commands."
-)
-def cli(file):
-    """Main entry point for the CLI."""
-    if file:
-        process_batch_file(file)
+def cli():
+    """Idea Nursery Shell"""
+    pass
 
 
-def process_batch_file(file_path):
+def process_batch_file(file_path: str):
     """Process commands from a batch file."""
+    runner = CliRunner()
+
     with open(file_path, "r") as file:
         for line in file:
             command = line.strip()
             if command:
                 try:
                     print(f"Executing command: {command}")
-                    # Use shlex.split to properly parse the command line
+
+                    # Use shlex.split to parse the command line
                     args = shlex.split(command)
-                    ctx = cli.make_context("cli", args)
-                    cli.invoke(ctx)
-                except click.ClickException as e:
-                    console.print(
-                        f"[red]Error executing command: {e.format_message()}[/red]"
-                    )
+
+                    # Pass the parsed command to the CLI runner
+                    result = runner.invoke(cli, args)
+
+                    # Check for errors in the result
+                    if result.exception:
+                        console.print(
+                            f"[red]Error executing command: {result.exception}[/red]"
+                        )
+                    else:
+                        console.print(f"Success executing: {command}")
+
                 except Exception as e:
                     console.print(f"[red]Unexpected error: {e}[/red]")
                     console.print(f"Executing command: {command = }; {args = }")
-                # finally:
-                #     console.print(f"Executing command: {command = }; {args = }")
-                #     sys.exit()
 
 
 @cli.command(short_help="Adds an idea")
@@ -193,21 +183,104 @@ def update(
         content,
         stage_str_to_pos[stage] if stage is not None else None,
         status_str_to_pos[status] if status is not None else None,
+        None,
+        None,
     )
     # Refresh the list to reflect changes
     _list_all()
 
 
-@cli.command(short_help="Sets reviewed timestamp for idea")
+@cli.command(short_help="Changes status from active to paused for idea")
+@click.argument("position", type=int)
+def pause(position: int):
+    idea = get_idea_by_position(position)
+    click_log(f"{idea = }")
+    if idea:
+        id, name, stage, status, added, reviewed, content_ = idea
+        click_log(f"{status = }; {type(status) = }")
+        if status != 1:
+            console.print(
+                f"[red]Only ideas whose status is {status_names[1]} can be paused![/red]"
+            )
+            return
+        now = timestamp()
+        # adjust added and reviewed to be restored when idea is activated
+        new_added = now - added
+        new_reviewed = now - reviewed
+        click_log(
+            f"{new_added = }; {added = }; {new_reviewed = }; {reviewed = }; {now = }"
+        )
+        update_idea(
+            position,
+            None,
+            None,
+            None,
+            0,  # status 1 -> 0
+            new_added,  # to restore later
+            new_reviewed,  # to restore later
+        )
+        _list_all()
+
+    else:
+        console.print(f"[red]Idea at position {position} not found![/red]")
+
+
+@cli.command(short_help="Changes status from paused to active for idea")
+@click.argument("position", type=int)
+def activate(position: int):
+    idea = get_idea_by_position(position)
+    click_log(f"{idea = }")
+    if idea:
+        id, name, stage, status, added, reviewed, content_ = idea
+        click_log(f"{status = }; {type(status) = }")
+        if status != 0:
+            console.print(
+                f"[red]Only ideas whose status is {status_names[0]} can be activated![/red]"
+            )
+            return
+        now = timestamp()
+        # adjust added and reviewed to be restored when idea is activated
+        new_added = now - added
+        new_reviewed = now - reviewed
+        click_log(
+            f"{new_added = }; {added = }; {new_reviewed = }; {reviewed = }; {now = }"
+        )
+        update_idea(
+            position,
+            None,
+            None,
+            None,
+            1,  # status 1 -> 0
+            new_added,  # to restore later
+            new_reviewed,  # to restore later
+        )
+        _list_all()
+
+    else:
+        console.print(f"[red]Idea at position {position} not found![/red]")
+
+
+@cli.command(short_help="Updates reviewed timestamp for idea")
 @click.argument("position", type=int)
 def review(position):
     """Review idea at POSITION."""
     # Print debug information
     click_log(f"Review idea at position {position}")
-    # Call the database function to handle the deletion
-    review_idea(position)
-    # Refresh the list to reflect changes
-    _list_all()
+    idea = get_idea_by_position(position)
+    click_log(f"{idea = }")
+    if idea:
+        id, name, stage, status, added, reviewed, content_ = idea
+        click_log(f"{status = }; {type(status) = }")
+        if status != 1:
+            console.print(
+                f"[red]Only ideas whose status is {status_names[1]} can be reviewed![/red]"
+            )
+            return
+        review_idea(position)
+        # Refresh the list to reflect changes
+        _list_all()
+    else:
+        console.print(f"[red]Idea at position {position} not found![/red]")
 
 
 @cli.command(short_help="Deletes an idea")
@@ -257,7 +330,7 @@ def _list_all():
     """List all ideas based on the current view settings."""
     # Fetch filtered ideas
     ideas, current_status, current_stage = get_ideas_from_view()
-    click_log(f"{ideas = }")
+    # click_log(f"{ideas = }")
 
     caption_elements = []
     if int(current_status) < len(status_pos_to_filter.keys()) - 1:
@@ -296,13 +369,23 @@ def _list_all():
 
     for idx, idea in enumerate(ideas, start=1):
         id_, name, stage, status, added_, reviewed_, position_ = idea
+        if status == 1:
+            idle = format_timedelta(timestamp() - reviewed_)
+            age = format_timedelta(timestamp() - added_)
+            age_color = ...
+        else:
+            age_color = idle_color = stage_colors[stage]
+            idle = "~"
+            age = "~"
         table.add_row(
             str(idx),
             name,
             f"[{stage_colors[stage]}]{stage_pos_to_str[stage]}",
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
-            f"{format_timedelta(timestamp() - added_, colors=(age_notice_seconds, age_alert_seconds))}",
-            f"{format_timedelta(timestamp() - reviewed_, colors=(idle_notice_seconds, idle_alert_seconds))}",
+            f"{age}",
+            f"{idle}",
+            # f"{format_timedelta(timestamp() - added_, colors=(age_notice_seconds, age_alert_seconds))}",
+            # f"{format_timedelta(timestamp() - reviewed_, colors=(idle_notice_seconds, idle_alert_seconds))}",
         )
     console.print(table)
 
@@ -314,8 +397,7 @@ def details(position):
     now = timestamp()
     console.clear()
     idea = get_idea_by_position(position)
-    with open("debug.log", "a") as debug_file:
-        click.echo(f"idea from position: {idea}", file=debug_file)
+    click_log(f"idea from {position = }: {idea}")
 
     if idea:
         id, name, stage, status, added, reviewed, content = idea
@@ -327,28 +409,37 @@ def details(position):
         )
         added_str = (
             f"{added:<14} ({format_timedelta(now - added, short=False)} ago at {format_datetime(added)})"
-            if added is not None
-            else ""
+            if added is not None and status == 1
+            else (
+                f"{added:<14} ({format_timedelta(added, short=False)} ago at {format_datetime(now - added)})"
+                if added is not None
+                else ""
+            )
         )
         reviewed_str = (
             f"{reviewed:<14} ({format_timedelta(now - reviewed, short=False)} ago at {format_datetime(reviewed)})"
-            if reviewed is not None
-            else ""
+            if reviewed is not None and status == 1
+            else (
+                f"{reviewed:<14} ({format_timedelta(reviewed, short=False)} ago at {format_datetime(now - reviewed)})"
+                if added is not None
+                else ""
+            )
         )
         meta = f"""\
 name:      {name}
-stage:      {stage_str}  
+stage:     {stage_str}  
 status:    {status_str}    
 added:     {added_str}  
 reviewed:  {reviewed_str}\
 """
 
         res = f"""\
+# {name}
 {content}\
 """
+        md = Markdown(res)
+        console.print(Panel(md, title="content"))
         console.print(Panel(meta, title="data"))
-        # md = Markdown(res)
-        console.print(Panel(res, title="content"))
     else:
         console.print(f"[red]Idea at position {position} not found![/red]")
 
@@ -363,39 +454,69 @@ def edit(position):
     click_log(f"starting with {idea = }")
     if idea:
         id, name, stage, status, added_, reviewed_, content = idea
-        new_content = edit_content_with_nvim(content)
-        click_log(f"{id=}, {new_content = }")
-        update_idea(id, None, new_content, None, None)
+        new_content = edit_content_with_nvim(content, f'"{name}"')
+        click_log(f"{position = }; {id = }; {new_content = }")
+        update_idea(position, None, new_content, None, None)
+
+
+# def main():
+#     if "-t" in sys.argv:
+#         try:
+#             idx = sys.argv.index("-t")
+#             batch_file = sys.argv[idx + 1]
+#             process_batch_file(batch_file)
+#             return
+#         except IndexError:
+#             console.print("[red]Error: Missing batch file after -t[/red]")
+#             return
+#     elif "--file" in sys.argv:
+#         try:
+#             idx = sys.argv.index("--file")
+#             batch_file = sys.argv[idx + 1]
+#             process_batch_file(batch_file)
+#             return
+#         except IndexError:
+#             console.print("[red]Error: Missing batch file after --file[/red]")
+#             return
+#
+#     elif len(sys.argv) > 1 and sys.argv[1] == "shell":
+#         sys.argv.pop(1)  # Remove 'shell' argument to prevent interference
+#         _list_all()
+#         cli()
+#     else:
+#         if len(sys.argv) == 1:
+#             sys.argv.append("--help")
+#         cli.main(prog_name="idea")
 
 
 def main():
-    if "-t" in sys.argv:
-        try:
-            idx = sys.argv.index("-t")
-            batch_file = sys.argv[idx + 1]
-            process_batch_file(batch_file)
-            return
-        except IndexError:
-            console.print("[red]Error: Missing batch file after -t[/red]")
-            return
-    elif "--file" in sys.argv:
-        try:
-            idx = sys.argv.index("--file")
-            batch_file = sys.argv[idx + 1]
-            process_batch_file(batch_file)
-            return
-        except IndexError:
-            console.print("[red]Error: Missing batch file after --file[/red]")
-            return
+    try:
+        # Handle batch processing for -t and --file options directly
+        if "-t" in sys.argv or "--file" in sys.argv:
+            if "-t" in sys.argv:
+                idx = sys.argv.index("-t")
+            elif "--file" in sys.argv:
+                idx = sys.argv.index("--file")
 
-    elif len(sys.argv) > 1 and sys.argv[1] == "shell":
-        sys.argv.pop(1)  # Remove 'shell' argument to prevent interference
-        _list_all()
-        cli()
-    else:
-        if len(sys.argv) == 1:
-            sys.argv.append("--help")
-        cli.main(prog_name="app")
+            try:
+                batch_file = sys.argv[idx + 1]
+                process_batch_file(batch_file)
+                return
+            except IndexError:
+                console.print("[red]Error: Missing batch file after -t or --file[/red]")
+                return
+
+        # Handle 'shell' command
+        if len(sys.argv) > 1 and sys.argv[1] == "shell":
+            _list_all()
+            sys.argv = [sys.argv[0]]  # Reset arguments to avoid conflict
+            cli.main(prog_name="idea")
+
+        # Default to Click's CLI
+        else:
+            cli.main(prog_name="idea")
+    except Exception as e:
+        console.print(f"[red]An unexpected error occurred: {e}[/red]")
 
 
 if __name__ == "__main__":

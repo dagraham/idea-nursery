@@ -1,28 +1,30 @@
 # setup.py
-from setuptools import setup, find_packages
 import os
 
+from setuptools import find_packages, setup
+
+
 def read_version():
-    with open("trf/__version__.py") as f:
+    with open("modules/__version__.py") as f:
         for line in f:
             if line.startswith("version"):
                 # Extract the version string
                 return line.split("=")[1].strip().strip("'")
 
-readme_path = os.path.join(os.path.dirname(__file__), 'trf', 'README.txt')
+readme_path = os.path.join(os.path.dirname(__file__), 'modules', 'README.txt')
 with open(readme_path, "r") as readme_file:
     long_description = readme_file.read()
 
 setup(
-    name="trf-dgraham",  # Replace with your app's name
+    name="idea-nursery",  # Replace with your app's name
     version=read_version(),
     author="Daniel A Graham",  # Replace with your name
     author_email="dnlgrhm@gmail.com",  # Replace with your email
-    description="This is a simple application for recording the sequence of occasions on which a task is completed and forecasting when the next completion might be needed.",
+    description="XXX.",
     # long_description=open("README.md").read(),  # If you have a README file
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/dagraham/trf-dgraham",  # Replace with the repo URL if applicable
+    url="https://github.com/dagraham/idea-nursery",  # Replace with the repo URL if applicable
     packages=find_packages(),
     include_package_data=True,  # Include non-Python files specified in MANIFEST.in
     package_data={
@@ -31,10 +33,11 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",  # Replace with your license
-        "Operating System :: OS Independent",
+        "Operating System :: OS Independent",/
     ],
     python_requires=">=3.9.0",  # Specify the minimum Python version
     install_requires=[
+        'XXX',
         'prompt-toolkit>=3.0.24',
         'ruamel.yaml>=0.15.88',
         'python-dateutil>=2.7.3',

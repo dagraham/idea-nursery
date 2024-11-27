@@ -28,7 +28,7 @@ Depends on the stage of developement - utimately a useful description of the ide
 The stages of development parallel the seed-to-plant metaphor: 
 
 - thought   
-Following the addage "You never know what you're thinking until you write it down", the first stage involves naming and describing the thought well enough to remember at a glance what you were thinking. At this stage, the idea will be little more than a suggestive **name** and, perhaps, a brief **description**.
+Following the addage "You never know what you're thinking until you write it down", the first stage involves naming and describing the thought well enough to remember at a glance what you were thinking. At this stage, the idea will be little more than a suggestive **name** and no more than a brief **description**.
 
 - kernel  
 The core or essence of the thought. Often this is a question. An example from this project would be "What ARE the stages of developement of a thought?" This stage persists until **description** contains a precise statement of *exactly* what would be needed to make this thought a *keeper* - *worth remembering and sharing*. If a question, what would be the requirements for an answer to be a *keeper*?  Not every thought survives this stage. My father used to remind me to "boil it down". Sometimes nothing is left. 😊 

@@ -7,7 +7,20 @@ import click
 
 from modules.model import click_log, timestamp
 
-conn = sqlite3.connect("ideas.db")
+from . import backup_dir, db_path, idea_home, log_dir
+
+original_makedirs = os.makedirs
+
+
+def safe_makedirs(path, *args, **kwargs):
+    click_log(f"{path = }; {args = }; {kwargs = }")
+    log_directory_creation(path)
+    original_makedirs(path, *args, **kwargs)
+
+
+os.makedirs = safe_makedirs
+
+conn = sqlite3.connect(db_path)
 c = conn.cursor()
 
 default_rank_setting = 8
@@ -48,31 +61,6 @@ def initialize_settings():
 
 
 initialize_settings()
-
-
-# def create_view():
-#     # Validate the column name to prevent SQL injection
-#     # Drop the view if it already exists
-#     c.execute("DROP VIEW IF EXISTS idea_positions")
-#
-#     # Create the SQL query dynamically
-#     query = f"""
-#         CREATE VIEW idea_positions AS
-#         SELECT
-#             name,
-#             rank,
-#             status,
-#             added,
-#             reviewed,
-#             id,
-#             (SELECT COUNT(*)
-#              FROM ideas AS i2
-#              WHERE i2.id < ideas.id) AS position
-#         FROM ideas
-#         ORDER BY status, rank, reviewed, id
-#     """
-#     res = c.execute(query)
-#     click_log(f"idea_positions: {res}")
 
 
 def create_view():
@@ -166,7 +154,7 @@ def get_ideas_from_view() -> List[Tuple]:
     #     id = idea[0]
     #     pos_to_id[pos] = id
     # click_log(f"{pos_to_id = }")
-    click_log(f"{ideas = }")
+    # click_log(f"{ideas = }")
 
     return ideas, current_status, current_stage
     # return c.fetchall()
@@ -235,6 +223,9 @@ def get_idea_by_position(position: int):
     try:
         # Get the ID from the position
         idea_id = get_id_from_position(position)
+        if not idea_id:
+            return None
+        click_log(f"{position = }; {idea_id = }")
     except ValueError as e:
         click.echo(str(e))
         return
@@ -267,6 +258,8 @@ def update_idea(
     content: Optional[str] = None,
     rank: Optional[int] = None,
     status: Optional[int] = None,
+    added: Optional[int] = None,
+    reviewed: Optional[int] = None,
 ):
     try:
         # Get the ID from the position
@@ -277,7 +270,7 @@ def update_idea(
     # Build the base query and parameters
     base_query = "UPDATE ideas SET "
     updates = ["reviewed = :reviewed"]
-    params = {"id": idea_id, "reviewed": timestamp()}
+    params = {"id": idea_id, "reviewed": reviewed if not None else timestamp()}
 
     # Append non-None fields to the updates list and params dict
     if name is not None:
@@ -292,6 +285,12 @@ def update_idea(
     if status is not None:
         updates.append("status = :status")
         params["status"] = status
+    if added is not None:
+        updates.append("added = :added")
+        params["added"] = added
+    # if reviewed is not None:
+    #     updates.append("reviewed = :reviewed")
+    #     params["reviewed"] = reviewed
 
     # Join updates to form the full query and add the WHERE clause
     query = f"{base_query} {', '.join(updates)} WHERE id = :id"
@@ -318,7 +317,7 @@ def review_idea(position: int):
         )
 
 
-def backup_with_time_retention(source_db: str, backup_dir: str, days: int = 30):
+def backup_with_retention(source_db: str, backup_dir: str, retention: int = 7):
     # Ensure backup directory exists
     os.makedirs(backup_dir, exist_ok=True)
 
@@ -330,20 +329,91 @@ def backup_with_time_retention(source_db: str, backup_dir: str, days: int = 30):
     with sqlite3.connect(source_db) as conn:
         with sqlite3.connect(backup_file) as backup_conn:
             conn.backup(backup_conn)
-    print(f"Backup created: {backup_file}")
+    click_log(f"Backup created: {backup_file}")
 
-    # Enforce retention: Delete backups older than specified days
-    cutoff_date = datetime.now() - timedelta(days=days)
-    for file in os.listdir(backup_dir):
-        file_path = os.path.join(backup_dir, file)
-        if os.path.isfile(file_path) and file.startswith("backup_"):
-            file_ctime = datetime.fromtimestamp(os.path.getctime(file_path))
-            if file_ctime < cutoff_date:
-                os.remove(file_path)
-                print(f"Deleted old backup: {file_path}")
+    # Enforce retention: Delete oldest files if over retention limit
+    backups = sorted(
+        [
+            os.path.join(backup_dir, f)
+            for f in os.listdir(backup_dir)
+            if f.startswith("backup_")
+        ],
+        key=os.path.getctime,
+    )
+
+    while len(backups) > retention:
+        oldest = backups.pop(0)
+        os.remove(oldest)
+        print(f"Deleted old backup: {oldest}")
+
+
+def get_file_last_modified(file_path: str) -> int:
+    """Get the last modified timestamp of a file in seconds since the epoch."""
+    return int(os.path.getmtime(file_path))
+
+
+def get_current_timestamp() -> int:
+    """Get the current timestamp in seconds since the epoch."""
+    return int(datetime.now().timestamp())
+
+
+def backup_with_conditions(
+    source_db: str, backup_dir: str, retention: int = 7, backup_interval_days: int = 1
+):
+    """keep 'last_backup' in the column 'added' and 'next_backup' in the column 'reviewed'"""
+    click_log("how now?")
+    conn = sqlite3.connect(source_db)
+    c = conn.cursor()
+
+    # Get added and reviewed from row 0
+    c.execute("SELECT added, reviewed FROM ideas WHERE id = 0")
+    row = c.fetchone()
+    added, reviewed = row if row else (None, None)
+
+    # Get current timestamps
+    current_timestamp = get_current_timestamp()
+    db_last_modified = get_file_last_modified(source_db)
+
+    click_log(
+        f"Current: {current_timestamp}, DB Last Modified: {db_last_modified}, Last Backup: {added}, Next Backup: {reviewed}"
+    )
+
+    # Initialize backup settings if they are None
+    if added is None or reviewed is None:
+        added = db_last_modified
+        reviewed = added + (backup_interval_days * 86400)  # Convert days to seconds
+        c.execute(
+            "UPDATE ideas SET added = ?, reviewed = ? WHERE id = 0", (added, reviewed)
+        )
+        conn.commit()
+        print(
+            f"Initialized backup settings: Last Backup: {added}, Next Backup: {reviewed}"
+        )
+        conn.close()
+        return
+
+    # Check if backup is needed
+    if current_timestamp > reviewed and db_last_modified > added:
+        print("Backup is due and the database has changed. Starting backup process...")
+
+        # Perform the backup
+        backup_with_retention(source_db, backup_dir, retention)
+
+        # Update the backup timestamps
+        added = db_last_modified
+        reviewed = added + (backup_interval_days * 86400)
+        c.execute(
+            "UPDATE ideas SET added = ?, reviewed = ? WHERE id = 0", (added, reviewed)
+        )
+        conn.commit()
+        print(f"Backup completed. Last Backup: {added}, Next Backup: {reviewed}")
+    else:
+        print("Backup not needed at this time.")
+
+    conn.close()
 
 
 # Example Usage
-source_db_path = "your_database.db"
-backup_directory = "./backups"
-backup_with_time_retention(source_db_path, backup_directory, days=30)
+# source_db_path = "your_database.db"
+# backup_directory = "./backups"
+# backup_with_retention(source_db_path, backup_directory)
