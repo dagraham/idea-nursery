@@ -7,7 +7,7 @@ from datetime import datetime
 from modules.__version__ import version
 
 
-def check_output(cmd):
+def check_output(cmd: str):
     if not cmd:
         return
     res = ""
@@ -122,14 +122,14 @@ if new_version:
     check_output(
         f"git log --pretty=format:'- %ar%d %an%n    %h %ai%n%w(70,4,4)%B' --max-count={count} --no-walk --tags >> CHANGES.txt"
     )
-    check_output(f"git commit -a --amend -m '{tmsg}'")
+    check_output(f"git commit -a --amend -m '{tmsg}' && git push")
 
     ans = input("switch to main, merge working and push to origin? [yN] ")
     if ans.lower() != "y":
         print("cancelled")
         sys.exit()
     ok, res = check_output(
-        f"git checkout main && git merge working && git push && git checkout working && git push"
+        f"git checkout main && git merge working && git push && git checkout working"
     )
     if res:
         print(res)
