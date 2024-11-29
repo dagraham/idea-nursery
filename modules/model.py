@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 from enum import Enum
+from pathlib import Path
 from typing import Tuple
 
 import click
@@ -14,6 +15,31 @@ alert_color = "#ff4500"
 notice_color = "#ffa500"
 
 
+def is_valid_path(path):
+    """
+    Check if a given path is a valid directory.
+    """
+    path = Path(path).expanduser()
+
+    # Check if the path exists and is a directory
+    if path.exists():
+        if path.is_dir():
+            if os.access(path, os.W_OK):  # Check if writable
+                return True, f"{path} is a valid and writable directory."
+            else:
+                return False, f"{path} is not writable."
+        else:
+            return False, f"{path} exists but is not a directory."
+    else:
+        # Try to create the directory
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            return True, f"{path} did not exist but has been created."
+        except OSError as e:
+            return False, f"Cannot create directory at {path}: {e}"
+
+
+# TODO: add optional log level to click_log?
 def click_log(msg: str):
     # Get the name of the calling function
     caller_name = inspect.stack()[1].function
@@ -83,22 +109,31 @@ def timestamp() -> int:
     return round(datetime.datetime.now().timestamp())
 
 
-def edit_content_with_nvim(initial_content: str, file_name="edit_session.md"):
+def edit_content_with_nvim(name: str, content: str):
     # Write the content to a temporary file
-    temp_path = f"/tmp/{file_name}"
+    temp_path = f'/tmp/f"{name}"'
     with open(temp_path, "w") as tmp_file:
-        tmp_file.write(initial_content)
+        tmp_file.write(
+            f"""\
+{name}
+
+{content}
+"""
+        )
 
     # Open the file in nvim
     subprocess.call(["nvim", temp_path])
 
     # Read the updated content
     with open(temp_path, "r") as tmp_file:
-        updated_content = tmp_file.read()
+        name_and_content = tmp_file.read()
+        lines = name_and_content.splitlines()
+        new_name = lines.pop(0).strip()
+        new_content = "\n".join(lines)
 
     # Cleanup
     os.unlink(temp_path)
 
-    click_log(f"{updated_content = }")
+    click_log(f"{new_name}; {new_content = }")
 
-    return updated_content
+    return new_name, new_content

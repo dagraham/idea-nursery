@@ -1,10 +1,10 @@
 #! /usr/bin/env python3
 import json
 import logging
-
-# import os
+import os
 import shlex
 import sys
+from pathlib import Path
 
 import click
 from click.testing import CliRunner
@@ -34,13 +34,16 @@ from modules.model import (
     edit_content_with_nvim,
     format_datetime,
     format_timedelta,
+    is_valid_path,
     timestamp,
 )
 
-from . import backup_dir, db_path, idea_home, log_dir
+from . import CONFIG_FILE, backup_dir, db_path, idea_home, log_dir, markdown_dir
 from .__version__ import version
 
-click_log(f"{idea_home = }; {backup_dir = }; {log_dir =}, {db_path = }; {version = }")
+click_log(
+    f"{idea_home = }; {backup_dir = }; {log_dir =}, {markdown_dir}, {db_path = }; {version = }"
+)
 # from pathlib import Path
 
 
@@ -81,16 +84,43 @@ idle_notice_seconds = 15 * 60  # 30 minutes
 alert_color = "#ff4500"
 notice_color = "#ffa500"
 
-
 console = Console()
 
 
-@shell(prompt="app> ", intro="Welcome to the idea manager shell!")
+@shell(prompt="app> ", intro="Welcome to the idea nursery shell!")
 def cli():
-    """Idea Nursery Shell"""
+    """Idea Nursery
+
+    Give your thoughts the care they deserve.
+
+    """
     pass
 
 
+def update_tmp_home(tmp_home: str = ""):
+    """
+    Save the IDEA_NURSERY path to the configuration file.
+    """
+    tmp_home = tmp_home.strip()
+    if tmp_home:
+        is_valid, message = is_valid_path(tmp_home)
+        if is_valid:
+            console.print(message)
+            config = {"IDEANURSERY": tmp_home}
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(config, f)
+            console.print(f"Configuration saved to {CONFIG_FILE}")
+        else:
+            console.print(f"[red]An unexpected error occurred: {message}[/red]")
+    elif os.path.exists(CONFIG_FILE):
+        os.remove(CONFIG_FILE)
+        console.print(f"[green]Temporary home directory use cancelled[/green]")
+    else:
+        console.print(f"[yellow]Temporary home directory not in use[/yellow]")
+
+
+@cli.command("batch")
+@click.argument("file_path", required=True)
 def process_batch_file(file_path: str):
     """Process commands from a batch file."""
     runner = CliRunner()
@@ -119,6 +149,32 @@ def process_batch_file(file_path: str):
                 except Exception as e:
                     console.print(f"[red]Unexpected error: {e}[/red]")
                     console.print(f"Executing command: {command = }; {args = }")
+
+
+@cli.command("set-home")
+@click.argument("home", required=False)  # Optional argument for the home directory
+def set_home(home):
+    """
+    Set or clear a temporary home directory for IDEA_NURSERY.
+    """
+    if home is None:
+        # No argument provided, clear configuration
+        update_tmp_home("")
+    else:
+        # Argument provided, set configuration
+        update_tmp_home(home)
+
+
+@cli.command()
+def info():
+    """Display app information."""
+    console.print(
+        f"""\
+[#87CEFA]Idea Nursery[/#87CEFA]
+version: [green]{version}[/green]
+home:    [green]{idea_home}[/green]
+"""
+    )
 
 
 @cli.command(short_help="Adds an idea")
@@ -260,27 +316,66 @@ def activate(position: int):
         console.print(f"[red]Idea at position {position} not found![/red]")
 
 
-@cli.command(short_help="Updates reviewed timestamp for idea")
+# advance / withdraw
+@cli.command(
+    short_help=f"Changes status from {status_names[1]} to {status_names[2]} for idea"
+)
 @click.argument("position", type=int)
-def review(position):
-    """Review idea at POSITION."""
-    # Print debug information
-    click_log(f"Review idea at position {position}")
+def advance(position: int):
     idea = get_idea_by_position(position)
     click_log(f"{idea = }")
     if idea:
         id, name, stage, status, added, reviewed, content_ = idea
         click_log(f"{status = }; {type(status) = }")
-        if status != 1:
+        if status != 0:
             console.print(
-                f"[red]Only ideas whose status is {status_names[1]} can be reviewed![/red]"
+                f"[red]Only ideas whose status is {status_names[0]} can be activated![/red]"
             )
             return
-        review_idea(position)
-        # Refresh the list to reflect changes
+        now = timestamp()
+        # adjust added and reviewed to be restored when idea is activated
+        new_added = now - added
+        new_reviewed = now - reviewed
+        click_log(
+            f"{new_added = }; {added = }; {new_reviewed = }; {reviewed = }; {now = }"
+        )
+        update_idea(
+            position,
+            None,
+            None,
+            None,
+            1,  # status 1 -> 0
+            new_added,  # to restore later
+            new_reviewed,  # to restore later
+        )
         _list_all()
+
     else:
         console.print(f"[red]Idea at position {position} not found![/red]")
+
+
+# @cli.command(short_help="Updates reviewed timestamp for idea")
+# @click.argument("position", type=int)
+# def review(position):
+#     """Review idea at POSITION."""
+#     # Print debug information
+#     click_log(f"Review idea at position {position}")
+#     idea = get_idea_by_position(position)
+#     click_log(f"{idea = }")
+#     if idea:
+#         id, name, stage, status, added, reviewed, content_ = idea
+#         click_log(f"{status = }; {type(status) = }")
+#         if status != 1:
+#             console.print(
+#                 f"[red]Only ideas whose status is {status_names[1]} can be reviewed![/red]"
+#             )
+#             return
+#         review_idea(position)
+#         # Refresh the list to reflect changes
+#         _list_all()
+#     else:
+#         console.print(f"[red]Idea at position {position} not found![/red]")
+#
 
 
 @cli.command(short_help="Deletes an idea")
@@ -322,7 +417,11 @@ def focus(status: str = None, stage: str = None):
 
 @cli.command(short_help="Lists ideas")
 def list():
-    """List all ideas based on the current focus settings."""
+    """List all ideas based on the current focus settings.
+    The POSITION number in the first column is used to specify an idea in commands,
+    e.g., "details 3" to see the details of an idea at POSITION 3. The age and idle
+    columns refer to how long ago the idea was, repectively, added or last reviewed/modified.
+    """
     _list_all()
 
 
@@ -352,7 +451,7 @@ def _list_all():
 
     # Render the table
     console.clear()
-    console.print(" 💡[#87CEFA]Idea Nursery[/#87CEFA]")
+    console.print(f" 💡[#87CEFA]Idea Nursery[/#87CEFA]")
     table = Table(
         show_header=True,
         header_style="bold blue",
@@ -444,67 +543,36 @@ reviewed:  {reviewed_str}\
         console.print(f"[red]Idea at position {position} not found![/red]")
 
 
-@cli.command(short_help="Edit content for idea in nvim")
+@cli.command(short_help="Review and edit name and content for idea in nvim")
 @click.argument("position", type=int)
-def edit(position):
-    """Show details for idea at POSITION."""
-    now = timestamp()
+def review(position):
+    """Review/Edit name and content for idea at POSITION."""
     console.clear()
     idea = get_idea_by_position(position)
     click_log(f"starting with {idea = }")
     if idea:
         id, name, stage, status, added_, reviewed_, content = idea
-        new_content = edit_content_with_nvim(content, f'"{name}"')
-        click_log(f"{position = }; {id = }; {new_content = }")
-        update_idea(position, None, new_content, None, None)
-
-
-# def main():
-#     if "-t" in sys.argv:
-#         try:
-#             idx = sys.argv.index("-t")
-#             batch_file = sys.argv[idx + 1]
-#             process_batch_file(batch_file)
-#             return
-#         except IndexError:
-#             console.print("[red]Error: Missing batch file after -t[/red]")
-#             return
-#     elif "--file" in sys.argv:
-#         try:
-#             idx = sys.argv.index("--file")
-#             batch_file = sys.argv[idx + 1]
-#             process_batch_file(batch_file)
-#             return
-#         except IndexError:
-#             console.print("[red]Error: Missing batch file after --file[/red]")
-#             return
-#
-#     elif len(sys.argv) > 1 and sys.argv[1] == "shell":
-#         sys.argv.pop(1)  # Remove 'shell' argument to prevent interference
-#         _list_all()
-#         cli()
-#     else:
-#         if len(sys.argv) == 1:
-#             sys.argv.append("--help")
-#         cli.main(prog_name="idea")
+        new_name, new_content = edit_content_with_nvim(name, content)
+        click_log(f"{position = }; {id = }; {new_name = }; {new_content = }")
+        update_idea(position, new_name, new_content, None, None, None, timestamp())
 
 
 def main():
     try:
         # Handle batch processing for -t and --file options directly
-        if "-t" in sys.argv or "--file" in sys.argv:
-            if "-t" in sys.argv:
-                idx = sys.argv.index("-t")
-            elif "--file" in sys.argv:
-                idx = sys.argv.index("--file")
-
-            try:
-                batch_file = sys.argv[idx + 1]
-                process_batch_file(batch_file)
-                return
-            except IndexError:
-                console.print("[red]Error: Missing batch file after -t or --file[/red]")
-                return
+        # if "-t" in sys.argv or "--file" in sys.argv:
+        #     if "-t" in sys.argv:
+        #         idx = sys.argv.index("-t")
+        #     elif "--file" in sys.argv:
+        #         idx = sys.argv.index("--file")
+        #
+        #     try:
+        #         batch_file = sys.argv[idx + 1]
+        #         process_batch_file(batch_file)
+        #         return
+        #     except IndexError:
+        #         console.print("[red]Error: Missing batch file after -t or --file[/red]")
+        #         return
 
         # Handle 'shell' command
         if len(sys.argv) > 1 and sys.argv[1] == "shell":

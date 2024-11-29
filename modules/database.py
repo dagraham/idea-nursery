@@ -9,16 +9,16 @@ from modules.model import click_log, timestamp
 
 from . import backup_dir, db_path, idea_home, log_dir
 
-original_makedirs = os.makedirs
-
-
-def safe_makedirs(path, *args, **kwargs):
-    click_log(f"{path = }; {args = }; {kwargs = }")
-    log_directory_creation(path)
-    original_makedirs(path, *args, **kwargs)
-
-
-os.makedirs = safe_makedirs
+# original_makedirs = os.makedirs
+#
+#
+# def safe_makedirs(path, *args, **kwargs):
+#     click_log(f"{path = }; {args = }; {kwargs = }")
+#     log_directory_creation(path)
+#     original_makedirs(path, *args, **kwargs)
+#
+#
+# os.makedirs = safe_makedirs
 
 conn = sqlite3.connect(db_path)
 c = conn.cursor()

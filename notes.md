@@ -1,5 +1,16 @@
 # Notes
 
+Todo
+
+- [ ] maybe one status command allows 1->0 and 0->1 pause and activate and 1->2 and 2->1 advance and withdraw
+
+- [ ] Work out idle colors
+- [ ] Work out age colors
+
+- [ ] Edit does name (first line) and content (remaining lines)
+- [ ] add rename, stage and release/promote? and then remove update as command - status handled by pause+activate and promote
+
+
 ## thinking about timestamp colors 
 
 ```
