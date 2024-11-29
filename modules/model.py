@@ -1,3 +1,4 @@
+import bisect
 import datetime
 import inspect
 import os
@@ -13,6 +14,35 @@ from . import backup_dir, db_path, idea_home, log_dir
 
 alert_color = "#ff4500"
 notice_color = "#ffa500"
+
+
+oneperiod = 24 * 60 * 60  # seconds in one day
+ages = [0, 2, 5, 9, 14, 20, 26, 32]  # in periods
+
+colors = [
+    #    seed,        sprout,     seedling,     plant
+    ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"],  # age/row index 0
+    ["#78716c", "#9b9051", "#c8aa2e", "#eec210"],  # age/row index 1
+    ["#b2563e", "#bc7136", "#de7b1b", "#f58809"],  # age/row index 2
+    ["#b2563e", "#de521b", "#f0530c", "#f96205"],  # age/row index 3
+    ["#ff3300", "#ff3300", "#ff3300", "#ff3300"],  # age/row index 4
+]
+
+
+def find_position(lst, x):
+    pos = bisect.bisect_right(lst, x) - 1
+    if pos >= 0:
+        return min(4, pos)
+    else:
+        return 0
+        # No element in the list is less than or equal to x
+
+
+def get_color(stage: int, seconds: int):
+    periods = round(seconds / oneperiod)
+    pos = find_position(ages[stage:], periods)
+    color = colors[pos][stage]
+    return color
 
 
 def is_valid_path(path):
@@ -56,7 +86,7 @@ def click_log(msg: str):
 
 
 def format_timedelta(
-    seconds: int, short: bool = True, colors: Tuple[int, int] = (0, 0)
+    seconds: int, short: bool = True, stage: int = 1, use_colors=False
 ) -> str:
     if seconds == 0:
         return "0m"
@@ -91,18 +121,21 @@ def format_timedelta(
     else:
         ret = f"{sign}{''.join(until)}"
 
-    notice_seconds, alert_seconds = colors
-    if alert_seconds > 0 and seconds >= alert_seconds:
-        # apply alert colors
-        ret = f"[{alert_color}]" + ret
-    elif notice_seconds > 0 and seconds >= notice_seconds:
-        ret = f"[{notice_color}]" + ret
+    if use_colors:
+        color = get_color(stage, seconds)
+        click_log(f"{stage = }; {seconds = }; {color = }")
+        ret = f"[{color}]" + ret
 
     return ret
 
 
-def format_datetime(seconds: int, fmt: str = "%Y-%m-%d %H:%M %Z") -> str:
-    return datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)
+def format_datetime(
+    seconds: int, fmt: str = "%Y-%m-%d %H:%M %Z", stage: int = 1, use_color=False
+) -> str:
+    if use_color:
+        return f"[{get_color(stage, seconds)}]{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
+    else:
+        return f"{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
 
 
 def timestamp() -> int:
@@ -115,9 +148,9 @@ def edit_content_with_nvim(name: str, content: str):
     with open(temp_path, "w") as tmp_file:
         tmp_file.write(
             f"""\
-{name}
+{name.strip()}
 
-{content}
+{content.lstrip()}
 """
         )
 

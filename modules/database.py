@@ -23,7 +23,7 @@ from . import backup_dir, db_path, idea_home, log_dir
 conn = sqlite3.connect(db_path)
 c = conn.cursor()
 
-default_rank_setting = 8
+default_stage_setting = 8
 default_status_setting = 6
 pos_to_id = {}
 
@@ -34,7 +34,7 @@ def create_table():
         CREATE TABLE IF NOT EXISTS ideas (
             name TEXT,
             content TEXT,
-            rank INTEGER,
+            stage INTEGER,
             status INTEGER,
             added INTEGER,
             reviewed INTEGER,
@@ -53,10 +53,10 @@ def initialize_settings():
     if c.fetchone()[0] == 0:
         with conn:
             c.execute(
-                # """INSERT INTO ideas (name, content, rank, status, added, reviewed)
+                # """INSERT INTO ideas (name, content, stage, status, added, reviewed)
                 #    VALUES ('settings', '', None, None, 0, 0)"""
-                f"""INSERT INTO ideas (name, content, status, rank, added, reviewed, id)
-                   VALUES ('settings', '', {default_status_setting}, {default_rank_setting}, 0, 0, 0)"""
+                f"""INSERT INTO ideas (name, content, status, stage, added, reviewed, id)
+                   VALUES ('settings', '', {default_status_setting}, {default_stage_setting}, 0, 0, 0)"""
             )
 
 
@@ -72,12 +72,12 @@ def create_view():
         CREATE VIEW idea_positions AS
         SELECT 
             name,
-            rank,
+            stage,
             status,
             added,
             reviewed,
             id,
-            ROW_NUMBER() OVER (ORDER BY status, rank, reviewed, id) AS position
+            ROW_NUMBER() OVER (ORDER BY status, stage, reviewed, id) AS position
         FROM ideas
     """
     c.execute(query)
@@ -88,20 +88,20 @@ create_view()
 
 def get_view_settings() -> Tuple[int | None]:
     """Fetch the current view settings."""
-    c.execute("SELECT status, rank FROM ideas WHERE id = 0")
+    c.execute("SELECT status, stage FROM ideas WHERE id = 0")
     result = c.fetchone()
     with open("debug.log", "a") as debug_file:
         click.echo(f"get_view_settings: {result = }", file=debug_file)
-    # return result if result else (default_status_setting, default_rank_setting)
+    # return result if result else (default_status_setting, default_stage_setting)
     return result if result else (6, 8)
 
 
-def set_view_settings(status: Optional[int] = 6, rank: Optional[int] = 8):
+def set_view_settings(status: Optional[int] = 6, stage: Optional[int] = 8):
     """Update the current view settings."""
     with conn:
         c.execute(
-            "UPDATE ideas SET status = :status, rank = :rank WHERE id = 0",
-            {"status": status, "rank": rank},
+            "UPDATE ideas SET status = :status, stage = :stage WHERE id = 0",
+            {"status": status, "stage": stage},
         )
 
 
@@ -127,21 +127,21 @@ def get_ideas_from_view() -> List[Tuple]:
         elif current_status // 3 == 1:
             where_clauses.append(f"status != {current_status % 3}")
 
-    # Add rank filter if applicable
+    # Add stage filter if applicable
     if (
         current_status is not None and current_stage < 8
-    ):  # Apply filter only if rank < 8
+    ):  # Apply filter only if stage < 8
         if current_stage // 4 == 0:
-            where_clauses.append(f"rank = {current_stage % 4}")
+            where_clauses.append(f"stage = {current_stage % 4}")
         elif current_stage // 4 == 1:
-            where_clauses.append(f"rank != {current_stage % 4}")
+            where_clauses.append(f"stage != {current_stage % 4}")
 
     # Build the WHERE clause
     where_clause = " AND ".join(where_clauses)
 
     # Fetch ideas based on filters
     query = f"""
-        SELECT id, name, rank, status, added, reviewed, position
+        SELECT id, name, stage, status, added, reviewed, position
         FROM idea_positions
         WHERE {where_clause}
     """
@@ -190,7 +190,7 @@ def get_id_from_position(position: int) -> int:
 def insert_idea(
     name: str,
     content: str,
-    rank: int,
+    stage: int,
     status: int,
     added: int = timestamp(),
     reviewed: int = timestamp(),
@@ -205,18 +205,19 @@ def insert_idea(
 
     with conn:
         c.execute(
-            """INSERT INTO ideas (name, content, rank, status, added, reviewed)
-               VALUES (:name, :content, :rank, :status, :added, :reviewed)""",
+            """INSERT INTO ideas (name, content, stage, status, added, reviewed)
+               VALUES (:name, :content, :stage, :status, :added, :reviewed)""",
             {
                 # "position": position,
                 "name": name,
                 "content": content,
-                "rank": rank,
+                "stage": stage,
                 "status": status,
                 "added": added,
                 "reviewed": reviewed,
             },
         )
+        sqlite3.register_adapter
 
 
 def get_idea_by_position(position: int):
@@ -231,7 +232,7 @@ def get_idea_by_position(position: int):
         return
 
     c.execute(
-        f"""SELECT id, name, rank, status, added, reviewed, content 
+        f"""SELECT id, name, stage, status, added, reviewed, content 
         FROM ideas 
         WHERE id={idea_id}"""
     )
@@ -256,7 +257,7 @@ def update_idea(
     position: int,
     name: Optional[str] = None,
     content: Optional[str] = None,
-    rank: Optional[int] = None,
+    stage: Optional[int] = None,
     status: Optional[int] = None,
     added: Optional[int] = None,
     reviewed: Optional[int] = None,
@@ -279,9 +280,9 @@ def update_idea(
     if content is not None:
         updates.append("content = :content")
         params["content"] = content
-    if rank is not None:
-        updates.append("rank = :rank")
-        params["rank"] = rank
+    if stage is not None:
+        updates.append("stage = :stage")
+        params["stage"] = stage
     if status is not None:
         updates.append("status = :status")
         params["status"] = status

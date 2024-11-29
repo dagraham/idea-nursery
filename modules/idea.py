@@ -122,7 +122,7 @@ def update_tmp_home(tmp_home: str = ""):
 @cli.command("batch")
 @click.argument("file_path", required=True)
 def process_batch_file(file_path: str):
-    """Process commands from a batch file."""
+    """Process commands from a batch file containing one command with any necessary arguments on each line."""
     runner = CliRunner()
 
     with open(file_path, "r") as file:
@@ -156,6 +156,8 @@ def process_batch_file(file_path: str):
 def set_home(home):
     """
     Set or clear a temporary home directory for IDEA_NURSERY.
+    Provide a path to use as a temporary directory or
+    enter nothing to stop using a temporary directory.
     """
     if home is None:
         # No argument provided, clear configuration
@@ -202,6 +204,8 @@ def add(name, content, stage, status):
         content,
         stage_str_to_pos[stage] if stage is not None else 0,
         status_str_to_pos[status] if status is not None else 1,
+        timestamp(),
+        timestamp(),
     )
     _list_all()
 
@@ -461,8 +465,8 @@ def _list_all():
     )
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("name", min_width=24)
-    table.add_column("stage", width=7, justify="center")
-    table.add_column("status", width=7, justify="center")
+    table.add_column("status", width=6, justify="center")
+    table.add_column("stage", width=6, justify="center")
     table.add_column("age", width=4, justify="center")
     table.add_column("idle", width=4, justify="center")
 
@@ -479,12 +483,12 @@ def _list_all():
         table.add_row(
             str(idx),
             name,
-            f"[{stage_colors[stage]}]{stage_pos_to_str[stage]}",
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
-            f"{age}",
-            f"{idle}",
-            # f"{format_timedelta(timestamp() - added_, colors=(age_notice_seconds, age_alert_seconds))}",
-            # f"{format_timedelta(timestamp() - reviewed_, colors=(idle_notice_seconds, idle_alert_seconds))}",
+            f"[{stage_colors[stage]}]{stage_pos_to_str[stage]}",
+            # f"{age}",
+            # f"{idle}",
+            f"{format_timedelta(timestamp() - added_, short=False, stage=stage, use_colors=True)}",
+            f"{format_timedelta(timestamp() - reviewed_, short=False, stage=stage)}",
         )
     console.print(table)
 
