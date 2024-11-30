@@ -95,7 +95,7 @@ def format_timedelta(
         sign = "-"
         seconds = abs(seconds)
     until = []
-    days = hours = minutes = 0
+    years = weeks = days = hours = minutes = 0
     if seconds:
         minutes = seconds // 60
         if minutes >= 60:
@@ -108,6 +108,20 @@ def format_timedelta(
             hours = hours % 24
             if short and hours >= 12:
                 days += 1
+        if days >= 7:
+            weeks = days // 7
+            days = days % 7
+            if short and days >= 4:
+                weeks += 1
+        if weeks >= 52:
+            years = weeks // 52
+            weeks = weeks % 52
+            if short and weeks >= 26:
+                years += 1
+    if years:
+        until.append(f"{years}y")
+    if weeks:
+        until.append(f"{weeks}w")
     if days:
         until.append(f"{days}d")
     if hours:

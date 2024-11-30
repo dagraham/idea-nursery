@@ -9,6 +9,7 @@ from pathlib import Path
 import click
 from click.testing import CliRunner
 from click_shell import shell
+
 # from prompt_toolkit.styles.named_colors import NAMED_COLORS
 from rich import box, print
 from rich.console import Console
@@ -17,26 +18,32 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from modules.database import (create_view, delete_idea, get_idea_by_position,
-                              get_ideas_from_view, get_view_settings,
-                              insert_idea, review_idea, set_view_settings,
-                              update_idea)
-from modules.model import (click_log, edit_content_with_nvim, format_datetime,
-                           format_timedelta, is_valid_path, timestamp)
+from modules.database import (
+    create_view,
+    delete_idea,
+    get_idea_by_position,
+    get_ideas_from_view,
+    get_view_settings,
+    insert_idea,
+    review_idea,
+    set_view_settings,
+    update_idea,
+)
+from modules.model import (
+    click_log,
+    edit_content_with_nvim,
+    format_datetime,
+    format_timedelta,
+    is_valid_path,
+    timestamp,
+)
 
-from . import (CONFIG_FILE, backup_dir, db_path, idea_home, log_dir,
-               markdown_dir)
+from . import CONFIG_FILE, backup_dir, db_path, idea_home, log_dir, markdown_dir
 from .__version__ import version
 
 click_log(
     f"{idea_home = }; {backup_dir = }; {log_dir =}, {markdown_dir}, {db_path = }; {version = }"
 )
-# from pathlib import Path
-
-
-# from rich.traceback import install
-
-# install(show_locals=True, max_frames=4)
 
 # stage_names = ["seed", "sprout", "seedling", "plant"]
 stage_names = ["inkling", "notion", "thought", "idea"]
@@ -52,8 +59,10 @@ stage_filters = (
 stage_filter_to_pos = {value: pos for pos, value in enumerate(stage_filters)}
 stage_pos_to_filter = {pos: value for pos, value in enumerate(stage_filters)}
 
-status_names = ["paused", "active", "available"]
-status_colors = ["#938856", "#c4a72f", "#f5c608"]
+# status_names = ["paused", "active", "available"]
+status_names = ["paused", "active"]
+# status_colors = ["#938856", "#c4a72f", "#f5c608"]
+status_colors = ["#938856", "#c4a72f"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
 valid_status = [i for i in range(len(status_names))]
@@ -182,18 +191,30 @@ home:    [green]{idea_home}[/green]
     default=status_names[1],
     help="Status of the idea",
 )
-def add(name, content, stage, status):
+@click.option(
+    "--added",
+    type=int,
+    default=timestamp(),
+    help="Added timestamp in seconds since the epoch",
+)
+@click.option(
+    "--reviewed",
+    type=int,
+    default=timestamp(),
+    help="Reviewed timestamp in seconds since the epoch",
+)
+def add(name, content, stage, status, added, reviewed):
     """Add a new idea with NAME, CONTENT, STAGE, and STATUS."""
     print(
-        f"Adding idea with name: {name}, content: {content}, stage: {stage}, status: {status}"
+        f"Adding idea with name: {name}, content: {content}, stage: {stage}, status: {status}, added: {added}, reviewed: {reviewed}"
     )
     insert_idea(
         name,
         content,
         stage_str_to_pos[stage] if stage is not None else 0,
         status_str_to_pos[status] if status is not None else 1,
-        timestamp(),
-        timestamp(),
+        added,
+        reviewed,
     )
     _list_all()
 
@@ -238,23 +259,20 @@ def update(
     _list_all()
 
 
-@cli.command(short_help="Changes status from active to paused for idea")
+@cli.command(short_help="Toggles status between active and paused for idea")
 @click.argument("position", type=int)
-def pause(position: int):
+def toggle(position: int):
+    """If idea at POSITION is active then pause it else if paused then activate it."""
     idea = get_idea_by_position(position)
     click_log(f"{idea = }")
     if idea:
         id, name, stage, status, added, reviewed, content_ = idea
         click_log(f"{status = }; {type(status) = }")
-        if status != 1:
-            console.print(
-                f"[red]Only ideas whose status is {status_names[1]} can be paused![/red]"
-            )
-            return
         now = timestamp()
-        # adjust added and reviewed to be restored when idea is activated
         new_added = now - added
         new_reviewed = now - reviewed
+        new_status = 0 if status == 1 else 1
+
         click_log(
             f"{new_added = }; {added = }; {new_reviewed = }; {reviewed = }; {now = }"
         )
@@ -263,111 +281,13 @@ def pause(position: int):
             None,
             None,
             None,
-            0,  # status 1 -> 0
+            new_status,  # status 1 -> 0
             new_added,  # to restore later
             new_reviewed,  # to restore later
         )
         _list_all()
-
     else:
         console.print(f"[red]Idea at position {position} not found![/red]")
-
-
-@cli.command(short_help="Changes status from paused to active for idea")
-@click.argument("position", type=int)
-def activate(position: int):
-    idea = get_idea_by_position(position)
-    click_log(f"{idea = }")
-    if idea:
-        id, name, stage, status, added, reviewed, content_ = idea
-        click_log(f"{status = }; {type(status) = }")
-        if status != 0:
-            console.print(
-                f"[red]Only ideas whose status is {status_names[0]} can be activated![/red]"
-            )
-            return
-        now = timestamp()
-        # adjust added and reviewed to be restored when idea is activated
-        new_added = now - added
-        new_reviewed = now - reviewed
-        click_log(
-            f"{new_added = }; {added = }; {new_reviewed = }; {reviewed = }; {now = }"
-        )
-        update_idea(
-            position,
-            None,
-            None,
-            None,
-            1,  # status 1 -> 0
-            new_added,  # to restore later
-            new_reviewed,  # to restore later
-        )
-        _list_all()
-
-    else:
-        console.print(f"[red]Idea at position {position} not found![/red]")
-
-
-# advance / withdraw
-@cli.command(
-    short_help=f"Changes status from {status_names[1]} to {status_names[2]} for idea"
-)
-@click.argument("position", type=int)
-def advance(position: int):
-    idea = get_idea_by_position(position)
-    click_log(f"{idea = }")
-    if idea:
-        id, name, stage, status, added, reviewed, content_ = idea
-        click_log(f"{status = }; {type(status) = }")
-        if status != 0:
-            console.print(
-                f"[red]Only ideas whose status is {status_names[0]} can be activated![/red]"
-            )
-            return
-        now = timestamp()
-        # adjust added and reviewed to be restored when idea is activated
-        new_added = now - added
-        new_reviewed = now - reviewed
-        click_log(
-            f"{new_added = }; {added = }; {new_reviewed = }; {reviewed = }; {now = }"
-        )
-        update_idea(
-            position,
-            None,
-            None,
-            None,
-            1,  # status 1 -> 0
-            new_added,  # to restore later
-            new_reviewed,  # to restore later
-        )
-        _list_all()
-
-    else:
-        console.print(f"[red]Idea at position {position} not found![/red]")
-
-
-# @cli.command(short_help="Updates reviewed timestamp for idea")
-# @click.argument("position", type=int)
-# def review(position):
-#     """Review idea at POSITION."""
-#     # Print debug information
-#     click_log(f"Review idea at position {position}")
-#     idea = get_idea_by_position(position)
-#     click_log(f"{idea = }")
-#     if idea:
-#         id, name, stage, status, added, reviewed, content_ = idea
-#         click_log(f"{status = }; {type(status) = }")
-#         if status != 1:
-#             console.print(
-#                 f"[red]Only ideas whose status is {status_names[1]} can be reviewed![/red]"
-#             )
-#             return
-#         review_idea(position)
-#         # Refresh the list to reflect changes
-#         _list_all()
-#     else:
-#         console.print(f"[red]Idea at position {position} not found![/red]")
-#
 
 
 @cli.command(short_help="Deletes an idea")
@@ -446,7 +366,8 @@ def _list_all():
     console.print(f" 💡[#87CEFA]Idea Nursery[/#87CEFA]")
     table = Table(
         show_header=True,
-        header_style="bold blue",
+        # header_style="bold blue",
+        header_style="#87CEFA",
         expand=True,
         box=box.HEAVY_EDGE,
         caption=caption,
