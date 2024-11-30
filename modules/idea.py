@@ -9,7 +9,6 @@ from pathlib import Path
 import click
 from click.testing import CliRunner
 from click_shell import shell
-
 # from prompt_toolkit.styles.named_colors import NAMED_COLORS
 from rich import box, print
 from rich.console import Console
@@ -18,27 +17,15 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from modules.database import (
-    create_view,
-    delete_idea,
-    get_idea_by_position,
-    get_ideas_from_view,
-    get_view_settings,
-    insert_idea,
-    review_idea,
-    set_view_settings,
-    update_idea,
-)
-from modules.model import (
-    click_log,
-    edit_content_with_nvim,
-    format_datetime,
-    format_timedelta,
-    is_valid_path,
-    timestamp,
-)
+from modules.database import (create_view, delete_idea, get_idea_by_position,
+                              get_ideas_from_view, get_view_settings,
+                              insert_idea, review_idea, set_view_settings,
+                              update_idea)
+from modules.model import (click_log, edit_content_with_nvim, format_datetime,
+                           format_timedelta, is_valid_path, timestamp)
 
-from . import CONFIG_FILE, backup_dir, db_path, idea_home, log_dir, markdown_dir
+from . import (CONFIG_FILE, backup_dir, db_path, idea_home, log_dir,
+               markdown_dir)
 from .__version__ import version
 
 click_log(
@@ -51,7 +38,8 @@ click_log(
 
 # install(show_locals=True, max_frames=4)
 
-stage_names = ["seed", "sprout", "seedling", "plant"]
+# stage_names = ["seed", "sprout", "seedling", "plant"]
+stage_names = ["inkling", "notion", "thought", "idea"]
 stage_colors = ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"]
 stage_pos_to_str = {pos: value for pos, value in enumerate(stage_names)}
 stage_str_to_pos = {value: pos for pos, value in enumerate(stage_names)}
@@ -217,13 +205,13 @@ def add(name, content, stage, status):
 @click.option(
     "--stage",
     type=click.Choice([r for r in stage_names]),
-    default=stage_names[0],
+    default=None,
     help="Stage of the idea",
 )
 @click.option(
     "--status",
     type=click.Choice([s for s in status_names]),
-    default=status_names[1],
+    default=None,
     help="Status of the idea",
 )
 def update(
@@ -244,7 +232,7 @@ def update(
         stage_str_to_pos[stage] if stage is not None else None,
         status_str_to_pos[status] if status is not None else None,
         None,
-        None,
+        timestamp(),
     )
     # Refresh the list to reflect changes
     _list_all()
@@ -465,7 +453,7 @@ def _list_all():
     )
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("name", min_width=24)
-    table.add_column("status", width=6, justify="center")
+    # table.add_column("status", width=6, justify="center")
     table.add_column("stage", width=6, justify="center")
     table.add_column("age", width=4, justify="center")
     table.add_column("idle", width=4, justify="center")
@@ -473,22 +461,22 @@ def _list_all():
     for idx, idea in enumerate(ideas, start=1):
         id_, name, stage, status, added_, reviewed_, position_ = idea
         if status == 1:
-            idle = format_timedelta(timestamp() - reviewed_)
-            age = format_timedelta(timestamp() - added_)
-            age_color = ...
+            age = f"{format_timedelta(timestamp() - added_, short=True, stage=stage, use_colors=True)}"
+            idle = (
+                f"{format_timedelta(timestamp() - reviewed_, short=True, stage=stage)}"
+            )
         else:
-            age_color = idle_color = stage_colors[stage]
             idle = "~"
             age = "~"
         table.add_row(
             str(idx),
             name,
-            f"[{status_colors[status]}]{status_pos_to_str[status]}",
+            # f"[{status_colors[status]}]{status_pos_to_str[status]}",
             f"[{stage_colors[stage]}]{stage_pos_to_str[stage]}",
-            # f"{age}",
-            # f"{idle}",
-            f"{format_timedelta(timestamp() - added_, short=False, stage=stage, use_colors=True)}",
-            f"{format_timedelta(timestamp() - reviewed_, short=False, stage=stage)}",
+            f"{age}",
+            f"{idle}",
+            # f"{format_timedelta(timestamp() - added_, short=True, stage=stage, use_colors=True)}",
+            # f"{format_timedelta(timestamp() - reviewed_, short=True, stage=stage)}",
         )
     console.print(table)
 
@@ -559,25 +547,11 @@ def review(position):
         new_name, new_content = edit_content_with_nvim(name, content)
         click_log(f"{position = }; {id = }; {new_name = }; {new_content = }")
         update_idea(position, new_name, new_content, None, None, None, timestamp())
+        _list_all()
 
 
 def main():
     try:
-        # Handle batch processing for -t and --file options directly
-        # if "-t" in sys.argv or "--file" in sys.argv:
-        #     if "-t" in sys.argv:
-        #         idx = sys.argv.index("-t")
-        #     elif "--file" in sys.argv:
-        #         idx = sys.argv.index("--file")
-        #
-        #     try:
-        #         batch_file = sys.argv[idx + 1]
-        #         process_batch_file(batch_file)
-        #         return
-        #     except IndexError:
-        #         console.print("[red]Error: Missing batch file after -t or --file[/red]")
-        #         return
-
         # Handle 'shell' command
         if len(sys.argv) > 1 and sys.argv[1] == "shell":
             _list_all()

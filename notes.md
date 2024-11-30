@@ -1,5 +1,42 @@
 # Notes
 
+
+- [ ] set-stage command
+```python
+@click.command()
+@click.argument(
+    "stage",
+    type=click.Choice([r for r in stage_names]),  # Constrain "stage" to valid choices
+)
+@click.argument("pos", type=int)  # Second required argument
+def set_stage(stage: str, pos: int):
+```
+
+- [ ] set-status command
+```python
+@click.command()
+@click.argument(
+    "status",
+    type=click.Choice([s for s in status_names]),
+    help="Status of the idea",
+)
+@click.argument("pos", type=int)  # Second required argument
+def set_status(status: str, pos: int):
+```
+
+- 0 to 1 or 2 and 1 or 2 to 0 replace pause and activate
+- 1 to 2 replace advance
+  - require stage 3 (idea/plant)?
+  - create (and then keep updated) markdown version?
+- allow 2 to 1?
+
+- maybe promote & demote with --status and/or --stage switches
+
+
+
+
+
+
 Todo
 
 - [ ] maybe one status command allows 1->0 and 0->1 pause and activate and 1->2 and 2->1 advance and withdraw

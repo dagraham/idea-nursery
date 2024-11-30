@@ -150,7 +150,7 @@ def edit_content_with_nvim(name: str, content: str):
             f"""\
 {name.strip()}
 
-{content.lstrip()}
+{content.lstrip() if content is not None else ""}
 """
         )
 
