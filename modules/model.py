@@ -86,7 +86,7 @@ def click_log(msg: str):
 
 
 def format_timedelta(
-    seconds: int, short: bool = True, stage: int = 1, use_colors=False
+    seconds: int, short: bool = True, status: int = 1, use_colors=False
 ) -> str:
     if seconds == 0:
         return "0m"
@@ -136,8 +136,8 @@ def format_timedelta(
         ret = f"{sign}{''.join(until)}"
 
     if use_colors:
-        color = get_color(stage, seconds)
-        click_log(f"{stage = }; {seconds = }; {color = }")
+        color = get_color(status, seconds)
+        click_log(f"{status = }; {seconds = }; {color = }")
         ret = f"[{color}]" + ret
 
     return ret

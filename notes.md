@@ -1,5 +1,59 @@
 # Notes
 
+def show (list of status names)
+
+    list of names -> list of numbers 
+
+    binary rep = [1 for x in [0,1,2,3] if x in list_of_numbers else 0]
+
+def hide (list of status_names)
+
+    list of names -> list of numbers 
+
+    binary rep = [x for x in [0,1,2,3] if x in list_of_numbers]
+    
+```python
+def hide(lst:list[int])->int:
+    """Converts list of status positions to a list of binaries where a 1's mean hide and 0's show."""
+    ret = []
+    for x in [0,1,2,3]:
+        if x in lst:
+            ret.append(1)
+        else:
+            ret.append(0)
+    return ret
+
+def show(lst:list[int])->int:
+    """Converts list of status positions to a list of binaries where a 1's mean hide and 0's show."""
+    ret = []
+    for x in [0,1,2,3]:
+        if x in lst:
+            ret.append(0)
+        else:
+            ret.append(1)
+    return ret
+
+def hide_pos_from_binary(lst_of_binaries:list[int])->list[int]:
+    count = 0
+    res = []
+    for x in lst_of_binaries:
+        if x == 1:
+            res.append(count)
+        count += 1
+    return res
+
+
+```
+def show(rep:List[int])
+
+
+- [ ] list of integers argument
+```python
+@click.command()
+@click.option('--numbers', type=int, multiple=True, help="List of integers")
+def process_numbers(numbers):
+    click.echo(f"Received numbers: {list(numbers)}")
+```
 
 - [ ] set-stage command
 ```python

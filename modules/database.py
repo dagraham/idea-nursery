@@ -23,8 +23,8 @@ from . import backup_dir, db_path, idea_home, log_dir
 conn = sqlite3.connect(db_path)
 c = conn.cursor()
 
-default_stage_setting = 8
-default_status_setting = 6
+default_status_setting = 0
+default_monitor_setting = 0
 pos_to_id = {}
 
 
@@ -34,8 +34,8 @@ def create_table():
         CREATE TABLE IF NOT EXISTS ideas (
             name TEXT,
             content TEXT,
-            stage INTEGER,
             status INTEGER,
+            monitor INTEGER,
             added INTEGER,
             reviewed INTEGER,
             id INTEGER PRIMARY KEY
@@ -53,10 +53,10 @@ def initialize_settings():
     if c.fetchone()[0] == 0:
         with conn:
             c.execute(
-                # """INSERT INTO ideas (name, content, stage, status, added, reviewed)
+                # """INSERT INTO ideas (name, content, status, monitor, added, reviewed)
                 #    VALUES ('settings', '', None, None, 0, 0)"""
-                f"""INSERT INTO ideas (name, content, status, stage, added, reviewed, id)
-                   VALUES ('settings', '', {default_status_setting}, {default_stage_setting}, 0, 0, 0)"""
+                f"""INSERT INTO ideas (name, content, monitor, status, added, reviewed, id)
+                   VALUES ('settings', '', {default_monitor_setting}, {default_status_setting}, 0, 0, 0)"""
             )
 
 
@@ -72,12 +72,12 @@ def create_view():
         CREATE VIEW idea_positions AS
         SELECT 
             name,
-            stage,
             status,
+            monitor,
             added,
             reviewed,
             id,
-            ROW_NUMBER() OVER (ORDER BY status, stage, reviewed, id) AS position
+            ROW_NUMBER() OVER (ORDER BY monitor, status, reviewed, id) AS position
         FROM ideas
     """
     c.execute(query)
@@ -86,23 +86,105 @@ def create_view():
 create_view()
 
 
-def get_view_settings() -> Tuple[int | None]:
-    """Fetch the current view settings."""
-    c.execute("SELECT status, stage FROM ideas WHERE id = 0")
-    result = c.fetchone()
-    with open("debug.log", "a") as debug_file:
-        click.echo(f"get_view_settings: {result = }", file=debug_file)
-    # return result if result else (default_status_setting, default_stage_setting)
-    return result if result else (6, 8)
+# def get_view_settings() -> Tuple[int | None]:
+#     """Fetch the current view settings."""
+#     c.execute("SELECT monitor, status FROM ideas WHERE id = 0")
+#     result = c.fetchone()
+#     with open("debug.log", "a") as debug_file:
+#         click.echo(f"get_view_settings: {result = }", file=debug_file)
+#     # return result if result else (default_monitor_setting, default_status_setting)
+#     return result if result else (6, 8)
+#
+#
+# def set_view_settings(monitor: Optional[int] = 2, status: Optional[int] = 4):
+#     """Update the current view settings."""
+#     with conn:
+#         c.execute(
+#             "UPDATE ideas SET monitor = :monitor, status = :status WHERE id = 0",
+#             {"monitor": monitor, "status": status},
+#         )
+#
 
 
-def set_view_settings(status: Optional[int] = 6, stage: Optional[int] = 8):
-    """Update the current view settings."""
+def set_hide_encoded(lst: List[int]):
+    """
+    Converts list of status HIDE positions to an encoded integer representing a list of binaries where a 1's mean hide and 0's show.
+    Positions correspond to 0-3: status[seed, sprout, seedling, plant], 4: monitor. In 0-3, 0/1 mean show/hide ideas with that status.
+    In 4, 0/1 means show/hide items with monitor value 0 (paused). This integer is stored as "status" for item id 0.
+    """
+    ret = []
+    for x in [0, 1, 2, 3]:
+        if x in lst:
+            ret.append(1)
+        else:
+            ret.append(0)
+    encoded = encode_binary_list(ret)
     with conn:
         c.execute(
-            "UPDATE ideas SET status = :status, stage = :stage WHERE id = 0",
-            {"status": status, "stage": stage},
+            "UPDATE ideas SET status = :status WHERE id = 0",
+            {"status": encoded},
         )
+
+
+def set_show_encoded(lst: List[int]):
+    """
+    Converts list of status SHOW positions to an encoded integer representing a list of binaries where a 1's mean hide and 0's show.
+    Positions correspond to 0-3: status[seed, sprout, seedling, plant], 4: monitor. In 0-3, 0/1 mean show/hide ideas with that status.
+    In 4, 0/1 means show/hide items with monitor value 0 (paused). This integer is stored as "status" for item id 0.
+    """
+    ret = []
+    for x in [0, 1, 2, 3]:
+        if x in lst:
+            ret.append(0)
+        else:
+            ret.append(1)
+    encoded = encode_binary_list(ret)
+    with conn:
+        c.execute(
+            "UPDATE ideas SET status = :status WHERE id = 0",
+            {"status": encoded},
+        )
+
+
+def get_view_settings() -> List[int]:
+    """
+    Fetch the current view settings as an encoded integer from status in idea id 0 and return the decoded list of binaries.
+    """
+    c.execute("SELECT status FROM ideas WHERE id = 0")
+    result = c.fetchone()[0]
+    click_log(f"{result = }")
+    if result:
+        ret = decode_to_binary_list(result)
+        click_log(f"{ret = }")
+        return ret
+    else:
+        # return [0, 0, 0, 0]
+        return [1, 1, 1, 1]
+
+
+def encode_binary_list(binary_list: List[int]) -> int:
+    result = 0
+    for bit in binary_list:
+        result = (result << 1) | bit
+    return result
+
+
+def decode_to_binary_list(encoded_int: int, length: int = 4) -> List[int]:
+    binary_list = []
+    for _ in range(length):
+        binary_list.append(encoded_int & 1)
+        encoded_int >>= 1
+    return binary_list[::-1]
+
+
+def pos_from_show_binaries(lst_of_binaries: list[int]) -> list[int]:
+    count = 0
+    res = []
+    for x in lst_of_binaries:
+        if x == 1:
+            res.append(count)
+        count += 1
+    return res
 
 
 def get_ideas_from_view() -> List[Tuple]:
@@ -113,51 +195,55 @@ def get_ideas_from_view() -> List[Tuple]:
         List[Tuple]: Filtered list of ideas.
     """
     # Get current view settings
-    current_status, current_stage = get_view_settings()
+    show_binaries = get_view_settings()
+    click_log(f"{show_binaries = }")
+    show_list = pos_from_show_binaries(show_binaries)
+    click_log(f"{show_list = }")
 
     # Determine filters
+
+    # # Add monitor filter if applicable
+    # if (
+    #     current_monitor is not None and current_monitor < 6
+    # ):  # Apply filter only if monitor < 6
+    #     if current_monitor // 3 == 0:
+    #         where_clauses.append(f"monitor = {current_monitor % 3}")
+    #     elif current_monitor // 3 == 1:
+    #         where_clauses.append(f"monitor != {current_monitor % 3}")
+    #
+    # # Add status filter if applicable
+    # if (
+    #     current_monitor is not None and current_status < 8
+    # ):  # Apply filter only if status < 8
+    #     if current_status // 4 == 0:
+    #         where_clauses.append(f"status = {current_status % 4}")
+    #     elif current_status // 4 == 1:
+    #         where_clauses.append(f"status != {current_status % 4}")
+
+    # status_list = [1, 3]  # List of integers for filtering
     where_clauses = ["id > 0"]  # Always skip row 0
 
-    # Add status filter if applicable
-    if (
-        current_status is not None and current_status < 6
-    ):  # Apply filter only if status < 6
-        if current_status // 3 == 0:
-            where_clauses.append(f"status = {current_status % 3}")
-        elif current_status // 3 == 1:
-            where_clauses.append(f"status != {current_status % 3}")
+    # Add the status condition
+    if show_list:  # Ensure the list is not empty
+        placeholders = ", ".join(["?"] * len(show_list))
+        where_clauses.append(f"status IN ({placeholders})")
 
-    # Add stage filter if applicable
-    if (
-        current_status is not None and current_stage < 8
-    ):  # Apply filter only if stage < 8
-        if current_stage // 4 == 0:
-            where_clauses.append(f"stage = {current_stage % 4}")
-        elif current_stage // 4 == 1:
-            where_clauses.append(f"stage != {current_stage % 4}")
-
-    # Build the WHERE clause
+    # Combine all conditions into a single WHERE clause
     where_clause = " AND ".join(where_clauses)
 
-    # Fetch ideas based on filters
+    # Construct the full query
     query = f"""
-        SELECT id, name, stage, status, added, reviewed, position
+        SELECT id, name, status, monitor, added, reviewed, position
         FROM idea_positions
         WHERE {where_clause}
     """
-    c.execute(query)
-    ideas = c.fetchall()
-    # pos = 0
-    # pos_to_id = {}
-    # for idea in ideas:
-    #     pos += 1
-    #     id = idea[0]
-    #     pos_to_id[pos] = id
-    # click_log(f"{pos_to_id = }")
-    # click_log(f"{ideas = }")
 
-    return ideas, current_status, current_stage
-    # return c.fetchall()
+    # Execute the query with the parameters for the placeholders
+    c.execute(query, show_list)  # Fetch ideas based on filters
+    ideas = c.fetchall()
+    click_log(f"{ideas = }")
+
+    return ideas, show_list
 
 
 def get_id_from_position(position: int) -> int:
@@ -190,8 +276,8 @@ def get_id_from_position(position: int) -> int:
 def insert_idea(
     name: str,
     content: str,
-    stage: int,
     status: int,
+    monitor: int,
     added: int = timestamp(),
     reviewed: int = timestamp(),
 ):
@@ -205,14 +291,14 @@ def insert_idea(
 
     with conn:
         c.execute(
-            """INSERT INTO ideas (name, content, stage, status, added, reviewed)
-               VALUES (:name, :content, :stage, :status, :added, :reviewed)""",
+            """INSERT INTO ideas (name, content, status, monitor, added, reviewed)
+               VALUES (:name, :content, :status, :monitor, :added, :reviewed)""",
             {
                 # "position": position,
                 "name": name,
                 "content": content,
-                "stage": stage,
                 "status": status,
+                "monitor": monitor,
                 "added": added,
                 "reviewed": reviewed,
             },
@@ -232,7 +318,7 @@ def get_idea_by_position(position: int):
         return
 
     c.execute(
-        f"""SELECT id, name, stage, status, added, reviewed, content 
+        f"""SELECT id, name, status, monitor, added, reviewed, content 
         FROM ideas 
         WHERE id={idea_id}"""
     )
@@ -257,8 +343,8 @@ def update_idea(
     position: int,
     name: Optional[str] = None,
     content: Optional[str] = None,
-    stage: Optional[int] = None,
     status: Optional[int] = None,
+    monitor: Optional[int] = None,
     added: Optional[int] = None,
     reviewed: Optional[int] = None,
 ):
@@ -280,12 +366,12 @@ def update_idea(
     if content is not None:
         updates.append("content = :content")
         params["content"] = content
-    if stage is not None:
-        updates.append("stage = :stage")
-        params["stage"] = stage
     if status is not None:
         updates.append("status = :status")
         params["status"] = status
+    if monitor is not None:
+        updates.append("monitor = :monitor")
+        params["monitor"] = monitor
     if added is not None:
         updates.append("added = :added")
         params["added"] = added

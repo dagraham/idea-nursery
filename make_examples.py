@@ -49,7 +49,7 @@ def name():
     return " ".join(words).rstrip()
 
 
-def stage():
+def status():
     return random.choice(["inkling", "notion", "thought", "idea"])
 
 
@@ -63,7 +63,7 @@ def make_examples(egfile: str = None, num_items: int = num_items, last_id=0):
     for _ in range(num_items):
         added, reviewed = added_reviewed()
         examples.append(
-            f"add '{name()}' --content '{content()}' --stage {stage()} --added {added} --reviewed {reviewed}"
+            f"add '{name()}' --content '{content()}' --status {status()} --added {added} --reviewed {reviewed}"
         )
 
     if egfile:

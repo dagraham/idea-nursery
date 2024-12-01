@@ -5,6 +5,7 @@ import os
 import shlex
 import sys
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 import click
 from click.testing import CliRunner
@@ -26,7 +27,8 @@ from modules.database import (
     get_view_settings,
     insert_idea,
     review_idea,
-    set_view_settings,
+    set_hide_encoded,
+    set_show_encoded,
     update_idea,
 )
 from modules.model import (
@@ -45,24 +47,9 @@ click_log(
     f"{idea_home = }; {backup_dir = }; {log_dir =}, {markdown_dir}, {db_path = }; {version = }"
 )
 
-# stage_names = ["seed", "sprout", "seedling", "plant"]
-stage_names = ["inkling", "notion", "thought", "idea"]
-stage_colors = ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"]
-stage_pos_to_str = {pos: value for pos, value in enumerate(stage_names)}
-stage_str_to_pos = {value: pos for pos, value in enumerate(stage_names)}
-valid_stage = [i for i in range(len(stage_names))]
-stage_filters = (
-    [f"+{name}" for name in stage_names]
-    + [f"-{name}" for name in stage_names]
-    + ["clear"]
-)
-stage_filter_to_pos = {value: pos for pos, value in enumerate(stage_filters)}
-stage_pos_to_filter = {pos: value for pos, value in enumerate(stage_filters)}
-
-# status_names = ["paused", "active", "available"]
-status_names = ["paused", "active"]
-# status_colors = ["#938856", "#c4a72f", "#f5c608"]
-status_colors = ["#938856", "#c4a72f"]
+# status_names = ["seed", "sprout", "seedling", "plant"]
+status_names = ["inkling", "notion", "thought", "idea"]
+status_colors = ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
 valid_status = [i for i in range(len(status_names))]
@@ -73,6 +60,21 @@ status_filters = (
 )
 status_filter_to_pos = {value: pos for pos, value in enumerate(status_filters)}
 status_pos_to_filter = {pos: value for pos, value in enumerate(status_filters)}
+
+# monitor_names = ["paused", "active", "available"]
+monitor_names = ["paused", "active"]
+# monitor_colors = ["#938856", "#c4a72f", "#f5c608"]
+monitor_colors = ["#938856", "#c4a72f"]
+monitor_pos_to_str = {pos: value for pos, value in enumerate(monitor_names)}
+monitor_str_to_pos = {value: pos for pos, value in enumerate(monitor_names)}
+valid_monitor = [i for i in range(len(monitor_names))]
+monitor_filters = (
+    [f"+{name}" for name in monitor_names]
+    + [f"-{name}" for name in monitor_names]
+    + ["clear"]
+)
+monitor_filter_to_pos = {value: pos for pos, value in enumerate(monitor_filters)}
+monitor_pos_to_filter = {pos: value for pos, value in enumerate(monitor_filters)}
 
 age_alert_seconds = 4 * 60 * 60  # 1 hour
 age_notice_seconds = 2 * 60 * 60  # 30 minutes
@@ -180,16 +182,16 @@ home:    [green]{idea_home}[/green]
 @click.argument("name")
 @click.option("--content", type=str, help="Content of the idea")
 @click.option(
-    "--stage",
-    type=click.Choice([r for r in stage_names]),
-    default=stage_names[0],
-    help="Stage of the idea",
+    "--status",
+    type=click.Choice([r for r in status_names]),
+    default=status_names[0],
+    help="status of the idea",
 )
 @click.option(
-    "--status",
-    type=click.Choice([s for s in status_names]),
-    default=status_names[1],
-    help="Status of the idea",
+    "--monitor",
+    type=click.Choice([s for s in monitor_names]),
+    default=monitor_names[1],
+    help="monitor of the idea",
 )
 @click.option(
     "--added",
@@ -203,16 +205,16 @@ home:    [green]{idea_home}[/green]
     default=timestamp(),
     help="Reviewed timestamp in seconds since the epoch",
 )
-def add(name, content, stage, status, added, reviewed):
-    """Add a new idea with NAME, CONTENT, STAGE, and STATUS."""
+def add(name, content, status, monitor, added, reviewed):
+    """Add a new idea with NAME, CONTENT, status, and monitor."""
     print(
-        f"Adding idea with name: {name}, content: {content}, stage: {stage}, status: {status}, added: {added}, reviewed: {reviewed}"
+        f"Adding idea with name: {name}, content: {content}, status: {status}, monitor: {monitor}, added: {added}, reviewed: {reviewed}"
     )
     insert_idea(
         name,
         content,
-        stage_str_to_pos[stage] if stage is not None else 0,
-        status_str_to_pos[status] if status is not None else 1,
+        status_str_to_pos[status] if status is not None else 0,
+        monitor_str_to_pos[monitor] if monitor is not None else 1,
         added,
         reviewed,
     )
@@ -224,34 +226,33 @@ def add(name, content, stage, status, added, reviewed):
 @click.option("--name")
 @click.option("--content", type=str, help="Content of the idea")
 @click.option(
-    "--stage",
-    type=click.Choice([r for r in stage_names]),
+    "--status",
+    type=click.Choice([r for r in status_names]),
     default=None,
-    help="Stage of the idea",
+    help="status of the idea",
 )
 @click.option(
-    "--status",
-    type=click.Choice([s for s in status_names]),
+    "--monitor",
+    type=click.Choice([s for s in monitor_names]),
     default=None,
-    help="Status of the idea",
+    help="monitor of the idea",
 )
 def update(
     position: int,
     name: str = None,
     content: str = None,
+    monitor: int = None,
     status: int = None,
-    stage: int = None,
 ):
-    """Update NAME, CONTENT, STAGE, and/or STATUS for idea at POSITION."""
+    """Update NAME, CONTENT, status, and/or monitor for idea at POSITION."""
     # Print debug information
-    click.echo(f"Update idea at position {position}")
     # Call the database function to handle the deletion
     update_idea(
         position,
         name,
         content,
-        stage_str_to_pos[stage] if stage is not None else None,
         status_str_to_pos[status] if status is not None else None,
+        monitor_str_to_pos[monitor] if monitor is not None else None,
         None,
         timestamp(),
     )
@@ -259,19 +260,20 @@ def update(
     _list_all()
 
 
-@cli.command(short_help="Toggles status between active and paused for idea")
+@cli.command(short_help="Toggles monitor between active and paused for idea")
 @click.argument("position", type=int)
 def toggle(position: int):
     """If idea at POSITION is active then pause it else if paused then activate it."""
+    position = int(position)
     idea = get_idea_by_position(position)
     click_log(f"{idea = }")
     if idea:
-        id, name, stage, status, added, reviewed, content_ = idea
-        click_log(f"{status = }; {type(status) = }")
+        id, name, status, monitor, added, reviewed, content_ = idea
+        click_log(f"{monitor = }; {type(monitor) = }")
         now = timestamp()
         new_added = now - added
         new_reviewed = now - reviewed
-        new_status = 0 if status == 1 else 1
+        new_monitor = 0 if monitor == 1 else 1
 
         click_log(
             f"{new_added = }; {added = }; {new_reviewed = }; {reviewed = }; {now = }"
@@ -281,7 +283,7 @@ def toggle(position: int):
             None,
             None,
             None,
-            new_status,  # status 1 -> 0
+            new_monitor,  # monitor 1 -> 0
             new_added,  # to restore later
             new_reviewed,  # to restore later
         )
@@ -290,33 +292,33 @@ def toggle(position: int):
         console.print(f"[red]Idea at position {position} not found![/red]")
 
 
-@cli.command(short_help="Updates the value of stage for idea")
+@cli.command(short_help="Updates the value of status for idea")
 @click.argument("position", type=int)  # Second required argument
 @click.argument(
-    "stage",
-    type=click.Choice([r for r in stage_names]),  # Constrain "stage" to valid choices
+    "status",
+    type=click.Choice([r for r in status_names]),  # Constrain "status" to valid choices
 )
-def stage(position: int, stage: str):
-    """Set the value of stage for idea at POSITION."""
+def status(position: int, status: str):
+    """Set the value of status for idea at POSITION."""
     idea = get_idea_by_position(position)
     if idea:
         click_log(f"{idea = }")
-        id, name, old_stage, status, added, reviewed, content_ = idea
-        new_stage = stage_str_to_pos[stage]
-        if new_stage == old_stage:
+        id, name, old_status, monitor, added, reviewed, content_ = idea
+        new_status = status_str_to_pos[status]
+        if new_status == old_status:
             console.print(
-                f"[red]The selected value of stage, {stage}, is unchanged from the current value.[/red]"
+                f"[red]The selected value of status, {status}, is unchanged from the current value.[/red]"
             )
             return
 
-        click_log(f"{stage = }")
+        click_log(f"{status = }")
 
         update_idea(
             position,
             None,
             None,
-            new_stage,
-            None,  # status 1 -> 0
+            new_status,
+            None,  # monitor 1 -> 0
             None,  # to restore later
             timestamp(),  # to restore later
         )
@@ -330,36 +332,72 @@ def stage(position: int, stage: str):
 def delete(position):
     """Delete an idea at POSITION."""
     # Print debug information
-    click.echo(f"Deleting idea at position {position}")
     # Call the database function to handle the deletion
     delete_idea(position)
     # Refresh the list to reflect changes
     _list_all()
 
 
-@cli.command(short_help="Focus on ideas based on their stage and status properties")
-@click.option(
-    "--stage",
-    type=click.Choice([r for r in stage_filters]),
-    help=f"With, e.g., '+{stage_names[0]}' only show ideas with stage '{stage_names[0]}'. With '-{stage_names[0]}' only show ideas that do NOT have stage '{stage_names[0]}'. 'clear' removes the stage focus.",
-)
+@cli.command(short_help="Focus on ideas based on their status properties")
 @click.option(
     "--status",
-    type=click.Choice([s for s in status_filters]),
+    type=click.Choice([r for r in status_filters]),
     help=f"With, e.g., '+{status_names[0]}' only show ideas with status '{status_names[0]}'. With '-{status_names[0]}' only show ideas that do NOT have status '{status_names[0]}'. 'clear' removes the status focus.",
 )
-def focus(status: str = None, stage: str = None):
+@click.option(
+    "--monitor",
+    type=click.Choice([s for s in monitor_filters]),
+    help=f"With, e.g., '+{monitor_names[0]}' only show ideas with monitor '{monitor_names[0]}'. With '-{monitor_names[0]}' only show ideas that do NOT have monitor '{monitor_names[0]}'. 'clear' removes the monitor focus.",
+)
+def focus(monitor: str = None, status: str = None):
     """Set or clear focus."""
-    current_status, current_stage = get_view_settings()
+    current_settings = get_view_settings()
     # Update settings based on user input
 
+    if monitor is not None:
+        current_monitor = monitor_filter_to_pos[monitor]
     if status is not None:
         current_status = status_filter_to_pos[status]
-    if stage is not None:
-        current_stage = stage_filter_to_pos[stage]
-    set_view_settings(current_status, current_stage)
-    click.echo(f"View settings updated: status={current_status}, stage={current_stage}")
+    set_view_settings(current_monitor, current_status)
     _list_all()
+
+
+@cli.command(short_help="Show ideas based on their status names")
+@click.argument(
+    "types",
+    type=str,
+)
+def show(types: str):
+    """Show specific ideas based on their status names."""
+    type_lst = types.split()
+    show_positions = []
+    for s in type_lst:
+        if s not in status_names:
+            console.print(
+                f"[red]'{s}' is unrecognized.\nOnly status names in: \[{', '.join(status_names)}] can be used.[/red]"
+            )
+            return
+        show_positions.append(status_str_to_pos[s])
+    set_hide_encoded(show_positions)
+
+
+@cli.command(short_help="Hide ideas based on their status names")
+@click.argument(
+    "types",
+    type=str,
+)
+def hide(types: str):
+    """Hide specific ideas based on their status names."""
+    type_lst = types.split()
+    hide_positions = []
+    for s in type_lst:
+        if s not in status_names:
+            console.print(
+                f"[red]'{s}' is unrecognized.\nOnly status names in \[{', '.join(status_names)}] can be used.[/red]"
+            )
+            return
+        hide_positions.append(status_str_to_pos[s])
+    set_show_encoded(hide_positions)
 
 
 @cli.command(short_help="Lists ideas")
@@ -375,26 +413,22 @@ def list():
 def _list_all():
     """List all ideas based on the current view settings."""
     # Fetch filtered ideas
-    ideas, current_status, current_stage = get_ideas_from_view()
-    # click_log(f"{ideas = }")
+    ideas, show_list = get_ideas_from_view()
+    click_log(f"{ideas = }; {show_list = }")
 
     caption_elements = []
-    if int(current_status) < len(status_pos_to_filter.keys()) - 1:
-        caption_elements.append(f"--status {status_pos_to_filter.get(current_status)}")
-    if int(current_stage) < len(stage_pos_to_filter.keys()) - 1:
-        caption_elements.append(f"--stage {stage_pos_to_filter.get(current_stage)}")
+    # if int(current_monitor) < len(monitor_pos_to_filter.keys()) - 1:
+    #     caption_elements.append(
+    #         f"--monitor {monitor_pos_to_filter.get(current_monitor)}"
+    #     )
+    if show_list:
+        hide_list = [x for x in [0, 1, 2, 3] if x not in show_list]
+        for pos in hide_list:
+            caption_elements.append(f"{status_names[pos]}")
 
     caption = ""
     if caption_elements:
-        caption = f"focus {' '.join(caption_elements)}"
-
-    # # ideas = get_ideas_from_view()
-    # with open("debug.log", "a") as debug_file:
-    #     click.echo(
-    #         f"ideas from view: {ideas}; {current_status = };  {current_stage = }; {caption = }",
-    #         file=debug_file,
-    #     )
-    # log.info(f"{ideas}")
+        caption = f"not showing: {', '.join(caption_elements)}"
 
     # Render the table
     console.clear()
@@ -409,30 +443,30 @@ def _list_all():
     )
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("name", min_width=24)
-    # table.add_column("status", width=6, justify="center")
-    table.add_column("stage", width=6, justify="center")
+    # table.add_column("monitor", width=6, justify="center")
+    table.add_column("status", width=6, justify="center")
     table.add_column("age", width=4, justify="center")
     table.add_column("idle", width=4, justify="center")
 
     for idx, idea in enumerate(ideas, start=1):
-        id_, name, stage, status, added_, reviewed_, position_ = idea
-        if status == 1:
-            age = f"{format_timedelta(timestamp() - added_, short=True, stage=stage, use_colors=True)}"
-            idle = (
-                f"{format_timedelta(timestamp() - reviewed_, short=True, stage=stage)}"
-            )
+        click_log(f"{idx = }; {idea = }; {type(idea) = }")
+        id_, name, status, monitor, added_, reviewed_, position_ = idea
+        click_log(f"{id_ = }; {name = }; {status = }")
+        if monitor == 1:
+            age = f"{format_timedelta(timestamp() - added_, short=True, status=status, use_colors=True)}"
+            idle = f"{format_timedelta(timestamp() - reviewed_, short=True, status=status)}"
         else:
             idle = "~"
             age = "~"
         table.add_row(
             str(idx),
             name,
-            # f"[{status_colors[status]}]{status_pos_to_str[status]}",
-            f"[{stage_colors[stage]}]{stage_pos_to_str[stage]}",
+            # f"[{monitor_colors[monitor]}]{monitor_pos_to_str[monitor]}",
+            f"[{status_colors[status]}]{status_pos_to_str[status]}",
             f"{age}",
             f"{idle}",
-            # f"{format_timedelta(timestamp() - added_, short=True, stage=stage, use_colors=True)}",
-            # f"{format_timedelta(timestamp() - reviewed_, short=True, stage=stage)}",
+            # f"{format_timedelta(timestamp() - added_, short=True, status=status, use_colors=True)}",
+            # f"{format_timedelta(timestamp() - reviewed_, short=True, status=status)}",
         )
     console.print(table)
 
@@ -447,16 +481,18 @@ def details(position):
     click_log(f"idea from {position = }: {idea}")
 
     if idea:
-        id, name, stage, status, added, reviewed, content = idea
-        stage_str = (
-            f"{stage:<14} ({stage_pos_to_str[stage]})" if stage is not None else ""
-        )
+        id, name, status, monitor, added, reviewed, content = idea
         status_str = (
             f"{status:<14} ({status_pos_to_str[status]})" if status is not None else ""
         )
+        monitor_str = (
+            f"{monitor:<14} ({monitor_pos_to_str[monitor]})"
+            if monitor is not None
+            else ""
+        )
         added_str = (
             f"{added:<14} ({format_timedelta(now - added, short=False)} ago at {format_datetime(added)})"
-            if added is not None and status == 1
+            if added is not None and monitor == 1
             else (
                 f"{added:<14} ({format_timedelta(added, short=False)} ago at {format_datetime(now - added)})"
                 if added is not None
@@ -465,7 +501,7 @@ def details(position):
         )
         reviewed_str = (
             f"{reviewed:<14} ({format_timedelta(now - reviewed, short=False)} ago at {format_datetime(reviewed)})"
-            if reviewed is not None and status == 1
+            if reviewed is not None and monitor == 1
             else (
                 f"{reviewed:<14} ({format_timedelta(reviewed, short=False)} ago at {format_datetime(now - reviewed)})"
                 if added is not None
@@ -474,8 +510,8 @@ def details(position):
         )
         meta = f"""\
 name:      {name}
-stage:     {stage_str}  
-status:    {status_str}    
+status:     {status_str}  
+monitor:    {monitor_str}    
 added:     {added_str}  
 reviewed:  {reviewed_str}\
 """
@@ -499,7 +535,7 @@ def review(position):
     idea = get_idea_by_position(position)
     click_log(f"starting with {idea = }")
     if idea:
-        id, name, stage, status, added_, reviewed_, content = idea
+        id, name, status, monitor, added_, reviewed_, content = idea
         new_name, new_content = edit_content_with_nvim(name, content)
         click_log(f"{position = }; {id = }; {new_name = }; {new_content = }")
         update_idea(position, new_name, new_content, None, None, None, timestamp())
