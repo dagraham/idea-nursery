@@ -290,9 +290,42 @@ def toggle(position: int):
         console.print(f"[red]Idea at position {position} not found![/red]")
 
 
-@cli.command(short_help="Deletes an idea")
+@cli.command(short_help="Updates the value of stage for idea")
+@click.argument("position", type=int)  # Second required argument
+@click.argument(
+    "stage",
+    type=click.Choice([r for r in stage_names]),  # Constrain "stage" to valid choices
+)
+def stage(position: int, stage: str):
+    """Set the value of stage for idea at POSITION."""
+    idea = get_idea_by_position(position)
+    if idea:
+        click_log(f"{idea = }")
+        id, name, old_stage, status, added, reviewed, content_ = idea
+        new_stage = stage_str_to_pos[stage]
+        if new_stage == old_stage:
+            console.print(
+                f"[red]The selected value of stage, {stage}, is unchanged from the current value.[/red]"
+            )
+            return
+
+        click_log(f"{stage = }")
+
+        update_idea(
             position,
             None,
+            None,
+            new_stage,
+            None,  # status 1 -> 0
+            None,  # to restore later
+            timestamp(),  # to restore later
+        )
+        _list_all()
+    else:
+        console.print(f"[red]Idea at position {position} not found![/red]")
+
+
+@cli.command(short_help="Deletes idea at POSITION")
 @click.argument("position", type=int)
 def delete(position):
     """Delete an idea at POSITION."""
