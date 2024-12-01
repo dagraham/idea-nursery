@@ -291,6 +291,7 @@ def toggle(position: int):
 
 
 @cli.command(short_help="Deletes an idea")
+            position,
 @click.argument("position", type=int)
 def delete(position):
     """Delete an idea at POSITION."""
