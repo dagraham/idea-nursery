@@ -4,6 +4,8 @@ import sys
 
 CONFIG_FILE = os.path.expanduser("~/.idea_nursery_config")
 
+pos_to_id = {}
+
 
 def process_arguments():
     """

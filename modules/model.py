@@ -17,31 +17,22 @@ notice_color = "#ffa500"
 
 
 oneperiod = 24 * 60 * 60  # seconds in one day
-ages = [0, 2, 5, 9, 14, 20, 26, 32]  # in periods
+status_ages = [0, 2, 5, 9, 14, 20, 26, 32]  # in periods
 
-colors = [
-    #    seed,        sprout,     seedling,     plant
-    ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"],  # age/row index 0
-    ["#78716c", "#9b9051", "#c8aa2e", "#eec210"],  # age/row index 1
-    ["#b2563e", "#bc7136", "#de7b1b", "#f58809"],  # age/row index 2
-    ["#b2563e", "#de521b", "#f0530c", "#f96205"],  # age/row index 3
+status_colors = [
+    #   inkling,    notion,      thought,      idea
+    ["#3399FF", "#7aaf6c", "#b5d23d", "#e8f115"],  # age/row index 0
+    ["#478fe6", "#9b9051", "#c8aa2e", "#eec210"],  # age/row index 1
+    ["#8f6b8c", "#bc7136", "#de7b1b", "#f58809"],  # age/row index 2
+    ["#cc4c40", "#de521b", "#f0530c", "#f96205"],  # age/row index 3
     ["#ff3300", "#ff3300", "#ff3300", "#ff3300"],  # age/row index 4
 ]
 
 
-def find_position(lst, x):
-    pos = bisect.bisect_right(lst, x) - 1
-    if pos >= 0:
-        return min(4, pos)
-    else:
-        return 0
-        # No element in the list is less than or equal to x
-
-
 def get_color(stage: int, seconds: int):
     periods = round(seconds / oneperiod)
-    pos = find_position(ages[stage:], periods)
-    color = colors[pos][stage]
+    pos = find_position(status_ages[stage:], periods)
+    color = status_colors[pos][stage]
     return color
 
 
@@ -85,58 +76,93 @@ def click_log(msg: str):
         )
 
 
+def find_position(lst, x):
+    pos = bisect.bisect_right(lst, x)
+    if pos >= 0:
+        return pos
+    else:
+        return 0
+
+
+s = 1
+m = 60 * s
+h = 60 * m
+d = 24 * h
+w = 7 * d
+y = 52 * w
+units = [s, m, h, d, w, y]
+labels = ["seconds", "minutes", "hours", "days", "weeks", "years"]
+
+
+def skip_show_units(seconds: int, num: int = 1):
+    pos = find_position(units, seconds)
+    used_labels = labels[:pos]
+    show_labels = used_labels[-num:]
+    round_labels = used_labels[:-num]
+
+    return round_labels, show_labels
+
+
 def format_timedelta(
-    seconds: int, short: bool = True, status: int = 1, use_colors=False
+    total_seconds: int, num: int = 1, status: int = 1, use_colors=False
 ) -> str:
-    if seconds == 0:
+    if total_seconds == 0:
         return "0m"
     sign = ""
-    if seconds < 0:
+    if total_seconds < 0:
         sign = "-"
-        seconds = abs(seconds)
+        total_seconds = abs(total_seconds)
     until = []
+    skip, show = skip_show_units(total_seconds, num)
+    click_log(f"{skip = }; {show = }")
+
     years = weeks = days = hours = minutes = 0
-    if seconds:
-        minutes = seconds // 60
+    if total_seconds:
+        seconds = total_seconds
+        if seconds >= 60:
+            minutes = seconds // 60
+            seconds = seconds % 60
+            if "seconds" in skip and seconds >= 30:
+                minutes += 1
         if minutes >= 60:
             hours = minutes // 60
             minutes = minutes % 60
-            if short and minutes >= 30:
+            if "minutes" in skip and minutes >= 30:
                 hours += 1
         if hours >= 24:
             days = hours // 24
             hours = hours % 24
-            if short and hours >= 12:
+            if "hours" in skip and hours >= 12:
                 days += 1
         if days >= 7:
             weeks = days // 7
             days = days % 7
-            if short and days >= 4:
+            if "days" in skip and days >= 4:
                 weeks += 1
         if weeks >= 52:
             years = weeks // 52
             weeks = weeks % 52
-            if short and weeks >= 26:
+            if "weeks" in skip and weeks >= 26:
                 years += 1
-    if years:
+    if "years" in show:
         until.append(f"{years}y")
-    if weeks:
+    if "weeks" in show:
         until.append(f"{weeks}w")
-    if days:
+    if "days" in show:
         until.append(f"{days}d")
-    if hours:
+    if "hours" in show:
         until.append(f"{hours}h")
-    if minutes:
+    if "minutes" in show:
         until.append(f"{minutes}m")
+    if "seconds" in show:
+        until.append(f"{seconds}s")
     if not until:
         until.append("0m")
-    if short:
-        ret = f"{sign}{until[0]}"
-    else:
-        ret = f"{sign}{''.join(until)}"
+    ret = f"{sign}{''.join(until)}"
+    click_log(f"{ret = }")
 
     if use_colors:
-        color = get_color(status, seconds)
+        color = get_color(status, total_seconds)
         click_log(f"{status = }; {seconds = }; {color = }")
         ret = f"[{color}]" + ret
 

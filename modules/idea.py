@@ -379,6 +379,7 @@ def show(types: str):
             return
         show_positions.append(status_str_to_pos[s])
     set_hide_encoded(show_positions)
+    _list_all()
 
 
 @cli.command(short_help="Hide ideas based on their status names")
@@ -398,6 +399,7 @@ def hide(types: str):
             return
         hide_positions.append(status_str_to_pos[s])
     set_show_encoded(hide_positions)
+    _list_all()
 
 
 @cli.command(short_help="Lists ideas")
@@ -428,7 +430,7 @@ def _list_all():
 
     caption = ""
     if caption_elements:
-        caption = f"not showing: {', '.join(caption_elements)}"
+        caption = f"hidden: {', '.join(caption_elements)}"
 
     # Render the table
     console.clear()
@@ -453,14 +455,14 @@ def _list_all():
         id_, name, status, monitor, added_, reviewed_, position_ = idea
         click_log(f"{id_ = }; {name = }; {status = }")
         if monitor == 1:
-            age = f"{format_timedelta(timestamp() - added_, short=True, status=status, use_colors=True)}"
-            idle = f"{format_timedelta(timestamp() - reviewed_, short=True, status=status)}"
+            age = f"{format_timedelta(timestamp() - added_, num=2, status=status, use_colors=True)}"
+            idle = f"{format_timedelta(timestamp() - reviewed_, num=2, status=status)}"
         else:
             idle = "~"
             age = "~"
         table.add_row(
             str(idx),
-            name,
+            f"[{status_colors[status]}]{name}",
             # f"[{monitor_colors[monitor]}]{monitor_pos_to_str[monitor]}",
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
             f"{age}",
@@ -491,19 +493,19 @@ def details(position):
             else ""
         )
         added_str = (
-            f"{added:<14} ({format_timedelta(now - added, short=False)} ago at {format_datetime(added)})"
+            f"{added:<14} ({format_timedelta(now - added, num=2)} ago at {format_datetime(added)})"
             if added is not None and monitor == 1
             else (
-                f"{added:<14} ({format_timedelta(added, short=False)} ago at {format_datetime(now - added)})"
+                f"{added:<14} ({format_timedelta(added, num=2)} ago at {format_datetime(now - added)})"
                 if added is not None
                 else ""
             )
         )
         reviewed_str = (
-            f"{reviewed:<14} ({format_timedelta(now - reviewed, short=False)} ago at {format_datetime(reviewed)})"
+            f"{reviewed:<14} ({format_timedelta(now - reviewed, num=2)} ago at {format_datetime(reviewed)})"
             if reviewed is not None and monitor == 1
             else (
-                f"{reviewed:<14} ({format_timedelta(reviewed, short=False)} ago at {format_datetime(now - reviewed)})"
+                f"{reviewed:<14} ({format_timedelta(reviewed, num=2)} ago at {format_datetime(now - reviewed)})"
                 if added is not None
                 else ""
             )

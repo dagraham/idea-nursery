@@ -77,10 +77,11 @@ def create_view():
             added,
             reviewed,
             id,
-            ROW_NUMBER() OVER (ORDER BY monitor, status, reviewed, id) AS position
+            ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
         FROM ideas
     """
     c.execute(query)
+    # ROW_NUMBER() OVER (ORDER BY monitor, status, reviewed, id) AS position
 
 
 create_view()
@@ -194,6 +195,7 @@ def get_ideas_from_view() -> List[Tuple]:
     Returns:
         List[Tuple]: Filtered list of ideas.
     """
+    global pos_to_id
     # Get current view settings
     show_binaries = get_view_settings()
     click_log(f"{show_binaries = }")
@@ -242,16 +244,23 @@ def get_ideas_from_view() -> List[Tuple]:
     c.execute(query, show_list)  # Fetch ideas based on filters
     ideas = c.fetchall()
     click_log(f"{ideas = }")
+    pos = 0
+    for idea in ideas:
+        pos += 1
+        id = idea[0]
+        pos_to_id[pos] = id
 
+    click_log(f"{pos_to_id = }")
     return ideas, show_list
 
 
 def get_id_from_position(position: int) -> int:
     """Get the ID of the idea at the specified position in the current view."""
-    # id = pos_to_id.get(position)
+    click_log(f"{pos_to_id = }")
+    id = pos_to_id.get(position)
     # click_log(f"{position = } -> {id = }")
-    # if id:
-    #     return id
+    if id:
+        return id
     # raise ValueError(f"No id corresponding to position {position}")
 
     c.execute(
@@ -309,6 +318,7 @@ def insert_idea(
 def get_idea_by_position(position: int):
     try:
         # Get the ID from the position
+        click_log(f"calling get_id_from_position with {position = }")
         idea_id = get_id_from_position(position)
         if not idea_id:
             return None
