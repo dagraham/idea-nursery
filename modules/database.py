@@ -68,19 +68,22 @@ def create_view():
     c.execute("DROP VIEW IF EXISTS idea_positions")
 
     # Create the SQL query dynamically
-    query = """
-        CREATE VIEW idea_positions AS
-        SELECT 
-            name,
-            status,
-            monitor,
-            added,
-            reviewed,
-            id,
-            ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
-        FROM ideas
+    query = """\
+CREATE VIEW idea_positions AS
+SELECT 
+    name,
+    content,
+    monitor,
+    status,
+    added,
+    reviewed,
+    id,
+    ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
+FROM ideas
     """
-    c.execute(query)
+    click_log(f"{query = }")
+    res = c.execute(query)
+    click_log(f"{res.fetchall() = }")
     # ROW_NUMBER() OVER (ORDER BY monitor, status, reviewed, id) AS position
 
 
@@ -234,13 +237,14 @@ def get_ideas_from_view() -> List[Tuple]:
     where_clause = " AND ".join(where_clauses)
 
     # Construct the full query
-    query = f"""
-        SELECT id, name, status, monitor, added, reviewed, position
-        FROM idea_positions
-        WHERE {where_clause}
+    query = f"""\
+SELECT id, name, status, monitor, added, reviewed, position
+FROM idea_positions
+WHERE {where_clause}\
     """
 
     # Execute the query with the parameters for the placeholders
+    click_log(f"{query = }; {show_list}")
     c.execute(query, show_list)  # Fetch ideas based on filters
     ideas = c.fetchall()
     click_log(f"{ideas = }")

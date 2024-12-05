@@ -39,6 +39,7 @@ from modules.model import (
     is_valid_path,
     timestamp,
 )
+from modules.model import type_colors as status_colors
 
 from . import CONFIG_FILE, backup_dir, db_path, idea_home, log_dir, markdown_dir
 from .__version__ import version
@@ -49,7 +50,8 @@ click_log(
 
 # status_names = ["seed", "sprout", "seedling", "plant"]
 status_names = ["inkling", "notion", "thought", "idea"]
-status_colors = ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"]
+# status_colors = ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"]
+# status_colors = ["#47a35c", "#7aaf6c", "#b5d23d", "#e8f115"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
 valid_status = [i for i in range(len(status_names))]
@@ -86,9 +88,9 @@ notice_color = "#ffa500"
 console = Console()
 
 
-@shell(prompt="app> ", intro="Welcome to the idea nursery shell!")
+@shell(prompt="app> ", intro="Welcome to the idea shell!")
 def cli():
-    """Idea Nursery
+    """Idea
 
     Give your thoughts the care they deserve.
 
@@ -98,14 +100,14 @@ def cli():
 
 def update_tmp_home(tmp_home: str = ""):
     """
-    Save the IDEA_NURSERY path to the configuration file.
+    Save the IDEA path to the configuration file.
     """
     tmp_home = tmp_home.strip()
     if tmp_home:
         is_valid, message = is_valid_path(tmp_home)
         if is_valid:
             console.print(message)
-            config = {"IDEANURSERY": tmp_home}
+            config = {"IDEAHOME": tmp_home}
             with open(CONFIG_FILE, "w") as f:
                 json.dump(config, f)
             console.print(f"Configuration saved to {CONFIG_FILE}")
@@ -171,7 +173,7 @@ def info():
     """Display app information."""
     console.print(
         f"""\
-[#87CEFA]Idea Nursery[/#87CEFA]
+[#87CEFA]Idea[/#87CEFA]
 version: [green]{version}[/green]
 home:    [green]{idea_home}[/green]
 """
@@ -179,8 +181,8 @@ home:    [green]{idea_home}[/green]
 
 
 @cli.command(short_help="Adds an idea")
-@click.argument("name")
-@click.option("--content", type=str, help="Content of the idea")
+@click.argument("name", type=str, nargs=-1)
+@click.option("--content", type=str)
 @click.option(
     "--status",
     type=click.Choice([r for r in status_names]),
@@ -205,38 +207,44 @@ home:    [green]{idea_home}[/green]
     default=timestamp(),
     help="Reviewed timestamp in seconds since the epoch",
 )
-def add(name, content, status, monitor, added, reviewed):
-    """Add a new idea with NAME, CONTENT, status, and monitor."""
-    print(
-        f"Adding idea with name: {name}, content: {content}, status: {status}, monitor: {monitor}, added: {added}, reviewed: {reviewed}"
-    )
+def add(
+    name: str,
+    content: str = "",
+    status: str = "inkling",
+    monitor: str = "active",
+    added: int = timestamp(),
+    reviewed: int = timestamp(),
+):
+    """Add a new idea with NAME and, optionally, CONTENT."""
+    print(f"Adding idea with name: {name} and content: {content}")
+    full_name = " ".join(name)
     insert_idea(
-        name,
-        content,
-        status_str_to_pos[status] if status is not None else 0,
-        monitor_str_to_pos[monitor] if monitor is not None else 1,
-        added,
-        reviewed,
+        name=full_name,
+        content=content,
+        status=status_str_to_pos[status],
+        monitor=monitor_str_to_pos[monitor],
+        added=added,
+        reviewed=reviewed,
     )
     _list_all()
 
 
-@cli.command(short_help="Updates data for idea")
-@click.argument("position", type=int)
-@click.option("--name")
-@click.option("--content", type=str, help="Content of the idea")
-@click.option(
-    "--status",
-    type=click.Choice([r for r in status_names]),
-    default=None,
-    help="status of the idea",
-)
-@click.option(
-    "--monitor",
-    type=click.Choice([s for s in monitor_names]),
-    default=None,
-    help="monitor of the idea",
-)
+# @cli.command(short_help="Updates data for idea")
+# @click.argument("position", type=int)
+# @click.option("--name")
+# @click.option("--content", type=str, help="Content of the idea")
+# @click.option(
+#     "--status",
+#     type=click.Choice([r for r in status_names]),
+#     default=None,
+#     help="status of the idea",
+# )
+# @click.option(
+#     "--monitor",
+#     type=click.Choice([s for s in monitor_names]),
+#     default=None,
+#     help="monitor of the idea",
+# )
 def update(
     position: int,
     name: str = None,
@@ -374,7 +382,7 @@ def show(types: str):
     for s in type_lst:
         if s not in status_names:
             console.print(
-                f"[red]'{s}' is unrecognized.\nOnly status names in: \[{', '.join(status_names)}] can be used.[/red]"
+                f"[red]'{s}' is unrecognized.\nOnly status names in: ({', '.join(status_names)}) can be used.[/red]"
             )
             return
         show_positions.append(status_str_to_pos[s])
@@ -394,7 +402,7 @@ def hide(types: str):
     for s in type_lst:
         if s not in status_names:
             console.print(
-                f"[red]'{s}' is unrecognized.\nOnly status names in \[{', '.join(status_names)}] can be used.[/red]"
+                f"[red]'{s}' is unrecognized.\nOnly status names in ({', '.join(status_names)}) can be used.[/red]"
             )
             return
         hide_positions.append(status_str_to_pos[s])
@@ -434,7 +442,7 @@ def _list_all():
 
     # Render the table
     console.clear()
-    console.print(f" 💡[#87CEFA]Idea Nursery[/#87CEFA]")
+    console.print(f" 💡[#87CEFA]Idea[/#87CEFA]")
     table = Table(
         show_header=True,
         # header_style="bold blue",
@@ -447,16 +455,16 @@ def _list_all():
     table.add_column("name", min_width=24)
     # table.add_column("monitor", width=6, justify="center")
     table.add_column("status", width=6, justify="center")
-    table.add_column("age", width=4, justify="center")
-    table.add_column("idle", width=4, justify="center")
+    table.add_column("added", width=6, justify="center")
+    table.add_column("reviewed", width=6, justify="center")
 
     for idx, idea in enumerate(ideas, start=1):
         click_log(f"{idx = }; {idea = }; {type(idea) = }")
         id_, name, status, monitor, added_, reviewed_, position_ = idea
         click_log(f"{id_ = }; {name = }; {status = }")
         if monitor == 1:
-            age = f"{format_timedelta(timestamp() - added_, num=2, status=status, use_colors=True)}"
-            idle = f"{format_timedelta(timestamp() - reviewed_, num=2, status=status)}"
+            age = f"{format_timedelta(timestamp() - added_, num=2, color_type=status, use_colors=True)}"
+            idle = f"{format_timedelta(timestamp() - reviewed_, num=2, color_type=4, use_colors=True)}"
         else:
             idle = "~"
             age = "~"
@@ -467,8 +475,6 @@ def _list_all():
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
             f"{age}",
             f"{idle}",
-            # f"{format_timedelta(timestamp() - added_, short=True, status=status, use_colors=True)}",
-            # f"{format_timedelta(timestamp() - reviewed_, short=True, status=status)}",
         )
     console.print(table)
 

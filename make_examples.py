@@ -24,7 +24,7 @@ num_items = 18
 onehour = 60 * 60  # in seconds
 oneday = 24 * onehour  # in seconds
 now = round(datetime.now().timestamp())
-times = [now - x for x in range(oneday, 5 * oneday, onehour)]
+times = [now - x for x in range(oneday, 20 * oneday, onehour)]
 
 
 def reviewed(times, added):
@@ -50,7 +50,23 @@ def name():
 
 
 def status():
-    return random.choice(["inkling", "notion", "thought", "idea"])
+    return random.choice(
+        [
+            "inkling",
+            "inkling",
+            "inkling",
+            "inkling",
+            "notion",
+            "notion",
+            "notion",
+            "thought",
+            "thought",
+            "thought",
+            "idea",
+            "idea",
+        ]
+    )
+    # return random.choice([0, 0, 0, 0, 1, 1, 1, 2, 2, 3])
 
 
 def content():

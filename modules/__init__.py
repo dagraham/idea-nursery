@@ -2,7 +2,7 @@ import json
 import os
 import sys
 
-CONFIG_FILE = os.path.expanduser("~/.idea_nursery_config")
+CONFIG_FILE = os.path.expanduser("~/.idea_home_config")
 
 pos_to_id = {}
 
@@ -11,16 +11,19 @@ def process_arguments():
     """
     Process sys.argv to get the necessary parameters, like the database file location.
     """
+    print(f"using {CONFIG_FILE = }")
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
-            idea_home = json.load(f).get("IDEANURSERY")
+            idea_home = json.load(f).get("IDEAHOME")
     else:
-        envhome = os.environ.get("IDEANURSERY")
+        envhome = os.environ.get("IDEAHOME")
+        print(f"got {envhome = }")
         if envhome:
             idea_home = envhome
         else:
             userhome = os.path.expanduser("~")
-            idea_home = os.path.join(userhome, ".idea_nursery/")
+            idea_home = os.path.join(userhome, ".idea_home/")
+    print(f"using {idea_home}")
 
     backup_dir = os.path.join(idea_home, "backup")
     log_dir = os.path.join(idea_home, "logs")

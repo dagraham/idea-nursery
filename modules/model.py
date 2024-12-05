@@ -10,30 +10,140 @@ from typing import Tuple
 
 import click
 
+from make_examples import status
+
 from . import backup_dir, db_path, idea_home, log_dir
+
+
+def timestamp() -> int:
+    return round(datetime.datetime.now().timestamp())
+
+
+def format_datetime(
+    seconds: int, fmt: str = "%Y-%m-%d %H:%M %Z", stage: int = 1, use_color=False
+) -> str:
+    if use_color:
+        return f"[{get_color(stage, seconds)}]{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
+    else:
+        return f"{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
+
+
+# TODO: add optional log level to click_log?
+def click_log(msg: str):
+    # Get the name of the calling function
+    caller_name = inspect.stack()[1].function
+    ts = timestamp()
+    log_name = format_datetime(ts, "%Y-%m-%d.log")
+
+    # Format the log message
+    with open(os.path.join(log_dir, log_name), "a") as debug_file:
+        msg = f"\nclick_log {format_datetime(timestamp())} [{caller_name}]\n{msg}"
+        click.echo(
+            msg,
+            file=debug_file,
+        )
+
 
 alert_color = "#ff4500"
 notice_color = "#ffa500"
 
 
+def hex_to_rgb(hex_color):
+    """Convert a hex color (#RRGGBB) to an RGB tuple."""
+    hex_color = hex_color.lstrip("#")
+    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+
+
+def rgb_to_hex(rgb):
+    """Convert an RGB tuple to a hex color (#RRGGBB)."""
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
+def interpolate_colors(color1, color2, n):
+    """
+    Generate a list of n colors forming a gradient between color1 and color2.
+    color1, color2: Hex color strings (#RRGGBB)
+    n: Number of colors to generate
+    """
+    rgb1 = hex_to_rgb(color1)
+    rgb2 = hex_to_rgb(color2)
+
+    colors = []
+    for i in range(n):
+        interpolated = tuple(
+            int(rgb1[j] + (rgb2[j] - rgb1[j]) * i / (n - 1)) for j in range(3)
+        )
+        colors.append(rgb_to_hex(interpolated))
+    return colors
+
+
+# Example usage
+start_color = "#fcf5f2"
+end_color = "#cc3300"
+num_colors = 10
+
+# gradient = interpolate_colors(start_color, end_color, num_colors)
+# print(gradient)
+
+
 oneperiod = 24 * 60 * 60  # seconds in one day
 status_ages = [0, 2, 5, 9, 14, 20, 26, 32]  # in periods
 
+# status_colors = [
+#     #   inkling,    notion,      thought,      idea
+#     ["#3399FF", "#7aaf6c", "#b5d23d", "#e8f115"],  # age/row index 0
+#     ["#478fe6", "#9b9051", "#c8aa2e", "#eec210"],  # age/row index 1
+#     ["#8f6b8c", "#bc7136", "#de7b1b", "#f58809"],  # age/row index 2
+#     ["#cc4c40", "#de521b", "#f0530c", "#f96205"],  # age/row index 3
+#     ["#ff3300", "#ff3300", "#ff3300", "#ff3300"],  # age/row index 4
+# ]
+
+
+type_colors = interpolate_colors("#7dbe20", "#ffff00", 4)
+# click_log(f"{type_colors = }")
+
+# status_colors = [
+#     interpolate_colors("#73e600", "#FF3300", 4),
+#     interpolate_colors("#7AAF6C", "#FF3300", 4),
+#     interpolate_colors("#B5D23D", "#FF3300", 4),
+#     interpolate_colors("#E8F115", "#FF3300", 4),
+# ]
+
 status_colors = [
-    #   inkling,    notion,      thought,      idea
-    ["#3399FF", "#7aaf6c", "#b5d23d", "#e8f115"],  # age/row index 0
-    ["#478fe6", "#9b9051", "#c8aa2e", "#eec210"],  # age/row index 1
-    ["#8f6b8c", "#bc7136", "#de7b1b", "#f58809"],  # age/row index 2
-    ["#cc4c40", "#de521b", "#f0530c", "#f96205"],  # age/row index 3
-    ["#ff3300", "#ff3300", "#ff3300", "#ff3300"],  # age/row index 4
+    interpolate_colors(type_colors[0], "#FF3300", 4),
+    interpolate_colors(type_colors[1], "#FF3300", 4),
+    interpolate_colors(type_colors[2], "#FF3300", 4),
+    interpolate_colors(type_colors[3], "#FF3300", 4),
 ]
 
 
-def get_color(stage: int, seconds: int):
-    periods = round(seconds / oneperiod)
-    pos = find_position(status_ages[stage:], periods)
-    color = status_colors[pos][stage]
-    return color
+idle_colors = interpolate_colors("#ffffff", "#ff9900", 32)
+
+idle_ages = [x // 2 for x in range(32)]
+
+
+def get_color(color_type: int, seconds: int):
+    color = "#cc9900"
+    pos = 0
+    try:
+        periods = round(seconds / oneperiod)
+        if color_type in [0, 1, 2, 3]:  # colors from status_ages and colors
+            pos = find_position(status_ages[color_type:], periods)
+            color = (
+                status_colors[color_type][pos]
+                if pos <= 4
+                else status_colors[color_type][-1]
+            )
+        elif color_type == 4:  # colors from idle_ages and colors
+            pos = find_position(idle_ages, periods)
+            color = idle_colors[pos] if pos <= 21 else idle_colors[-1]
+            click_log(f"got {color = } for {pos = }")
+        return color
+    except Exception as e:
+        click_log(
+            f"Exception {e} raised processing {color_type = } and {seconds = } for {pos = }"
+        )
+        return color
 
 
 def is_valid_path(path):
@@ -60,27 +170,15 @@ def is_valid_path(path):
             return False, f"Cannot create directory at {path}: {e}"
 
 
-# TODO: add optional log level to click_log?
-def click_log(msg: str):
-    # Get the name of the calling function
-    caller_name = inspect.stack()[1].function
-    ts = timestamp()
-    log_name = format_datetime(ts, "%Y-%m-%d.log")
-
-    # Format the log message
-    with open(os.path.join(log_dir, log_name), "a") as debug_file:
-        msg = f"\nclick_log {format_datetime(timestamp())} [{caller_name}]\n{msg}"
-        click.echo(
-            msg,
-            file=debug_file,
-        )
-
-
 def find_position(lst, x):
-    pos = bisect.bisect_right(lst, x)
-    if pos >= 0:
-        return pos
-    else:
+    try:
+        pos = bisect.bisect_right(lst, x)
+        if pos >= 0:
+            return pos
+        else:
+            return 0
+    except Exception as e:
+        click_log(f"Exception {e} raised processing {lst = } and {x =}")
         return 0
 
 
@@ -104,7 +202,7 @@ def skip_show_units(seconds: int, num: int = 1):
 
 
 def format_timedelta(
-    total_seconds: int, num: int = 1, status: int = 1, use_colors=False
+    total_seconds: int, num: int = 1, color_type: int = 1, use_colors=False
 ) -> str:
     if total_seconds == 0:
         return "0m"
@@ -162,24 +260,11 @@ def format_timedelta(
     click_log(f"{ret = }")
 
     if use_colors:
-        color = get_color(status, total_seconds)
-        click_log(f"{status = }; {seconds = }; {color = }")
+        color = get_color(color_type, total_seconds)
+        click_log(f"{color_type = }; {seconds = }; {color = }")
         ret = f"[{color}]" + ret
 
     return ret
-
-
-def format_datetime(
-    seconds: int, fmt: str = "%Y-%m-%d %H:%M %Z", stage: int = 1, use_color=False
-) -> str:
-    if use_color:
-        return f"[{get_color(stage, seconds)}]{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
-    else:
-        return f"{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
-
-
-def timestamp() -> int:
-    return round(datetime.datetime.now().timestamp())
 
 
 def edit_content_with_nvim(name: str, content: str):
