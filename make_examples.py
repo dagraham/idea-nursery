@@ -27,7 +27,7 @@ now = round(datetime.now().timestamp())
 times = [now - x for x in range(oneday, 16 * oneday, onehour)]
 
 
-def reviewed(times, added):
+def probed(times, added):
     pos = bisect.bisect_right(times, added) - 1
     if pos >= 0:
         return random.choice(times[pos:])
@@ -35,7 +35,7 @@ def reviewed(times, added):
         return now
 
 
-def added_reviewed():
+def added_probed():
     added = random.choice(times)
     later_times = [x for x in times if x >= added]
     return added, random.choice(later_times)
@@ -77,9 +77,9 @@ def make_examples(egfile: str = None, num_items: int = num_items, last_id=0):
     examples = []
 
     for _ in range(num_items):
-        added, reviewed = added_reviewed()
+        added, probed = added_probed()
         examples.append(
-            f"add '{name()}' --content '{content()}' --status {status()} --added {added} --reviewed {reviewed}"
+            f"add '{name()}' --content '{content()}' --status {status()} --added {added} --probed {probed}"
         )
 
     if egfile:

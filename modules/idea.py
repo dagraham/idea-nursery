@@ -227,13 +227,13 @@ home:    [green]{idea_home}[/green]
     "--added",
     type=int,
     default=timestamp(),
-    help="Added timestamp in seconds since the epoch",
+    help="added timestamp in seconds since the epoch",
 )
 @click.option(
-    "--reviewed",
+    "--probed",
     type=int,
     default=timestamp(),
-    help="Reviewed timestamp in seconds since the epoch",
+    help="probed timestamp in seconds since the epoch",
 )
 def add(
     name: str,
@@ -241,7 +241,7 @@ def add(
     status: str = "inkling",
     monitor: str = "active",
     added: int = timestamp(),
-    reviewed: int = timestamp(),
+    probed: int = timestamp(),
 ):
     """Add a new idea with NAME and, optionally, CONTENT."""
     print(f"Adding idea with name: {name} and content: {content}")
@@ -252,7 +252,7 @@ def add(
         status=status_str_to_pos[status],
         monitor=monitor_str_to_pos[monitor],
         added=added,
-        reviewed=reviewed,
+        probed=probed,
     )
     _list_all()
 
@@ -283,21 +283,19 @@ def update(
 @cli.command(short_help="Toggles monitor status between paused and active for idea")
 @click.argument("position", type=int)
 def pause(position: int):
-    """If idea at POSITION is active then pause it else if paused then activate it. When an idea is paused the times since added and since reviewed are saved and then restored when/if the idea is activated again."""
+    """If idea at POSITION is active then pause it else if paused then activate it. When an idea is paused the times since added and since probed are saved and then restored when/if the idea is activated again."""
     position = int(position)
     idea = get_idea_by_position(position)
     click_log(f"{idea = }")
     if idea:
-        id, name, status, monitor, added, reviewed, content_ = idea
+        id, name, status, monitor, added, probed, content_ = idea
         click_log(f"{monitor = }; {type(monitor) = }")
         now = timestamp()
         new_added = now - added
-        new_reviewed = now - reviewed
+        new_probed = now - probed
         new_monitor = 0 if monitor == 1 else 1
 
-        click_log(
-            f"{new_added = }; {added = }; {new_reviewed = }; {reviewed = }; {now = }"
-        )
+        click_log(f"{new_added = }; {added = }; {new_probed = }; {probed = }; {now = }")
         update_idea(
             position,
             None,
@@ -305,7 +303,7 @@ def pause(position: int):
             None,
             new_monitor,  # monitor 1 -> 0
             new_added,  # to restore later
-            new_reviewed,  # to restore later
+            new_probed,  # to restore later
         )
         _list_all()
     else:
@@ -323,7 +321,7 @@ def status(position: int, status: str):
     idea = get_idea_by_position(position)
     if idea:
         click_log(f"{idea = }")
-        id, name, old_status, monitor, added, reviewed, content_ = idea
+        id, name, old_status, monitor, added, probed, content_ = idea
         new_status = status_str_to_pos[status]
         if new_status == old_status:
             console.print(
@@ -428,7 +426,7 @@ def list():
     """List all ideas based on the current focus settings.
     The POSITION number in the first column is used to specify an idea in commands,
     e.g., "details 3" to see the details of an idea at POSITION 3. The age and idle
-    columns refer to how long ago the idea was, repectively, added or last reviewed/modified.
+    columns refer to how long ago the idea was, repectively, added or last probed/modified.
     """
     _list_all()
 
@@ -485,17 +483,17 @@ def _list_all():
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("name", min_width=24)
     # table.add_column("monitor", width=6, justify="center")
-    table.add_column("status", width=7, justify="center")
-    table.add_column("added", width=7, justify="center")
-    table.add_column("reviewed", width=7, justify="center")
+    table.add_column("status", width=6, justify="center")
+    table.add_column("added", width=6, justify="center")
+    table.add_column("probed", width=6, justify="center")
 
     for idx, idea in enumerate(ideas, start=1):
         click_log(f"{idx = }; {idea = }; {type(idea) = }")
-        id_, name, status, monitor, added_, reviewed_, position_ = idea
+        id_, name, status, monitor, added_, probed_, position_ = idea
         click_log(f"{id_ = }; {name = }; {status = }")
         if monitor == 1:
             age = f"{format_timedelta(timestamp() - added_, num=2, color_type=status, use_colors=True)}"
-            idle = f"{format_timedelta(timestamp() - reviewed_, num=2, color_type=4, use_colors=True)}"
+            idle = f"{format_timedelta(timestamp() - probed_, num=2, color_type=4, use_colors=True)}"
         else:
             idle = "~"
             age = "~"
@@ -520,7 +518,7 @@ def details(position):
     click_log(f"idea from {position = }: {idea}")
 
     if idea:
-        id, name, status, monitor, added, reviewed, content = idea
+        id, name, status, monitor, added, probed, content = idea
         status_str = (
             f"{status:<14} ({status_pos_to_str[status]})" if status is not None else ""
         )
@@ -538,11 +536,11 @@ def details(position):
                 else ""
             )
         )
-        reviewed_str = (
-            f"{reviewed:<14} ({format_timedelta(now - reviewed, num=2)} ago at {format_datetime(reviewed)})"
-            if reviewed is not None and monitor == 1
+        probed_str = (
+            f"{probed:<14} ({format_timedelta(now - probed, num=2)} ago at {format_datetime(probed)})"
+            if probed is not None and monitor == 1
             else (
-                f"{reviewed:<14} ({format_timedelta(reviewed, num=2)} ago at {format_datetime(now - reviewed)})"
+                f"{probed:<14} ({format_timedelta(probed, num=2)} ago at {format_datetime(now - probed)})"
                 if added is not None
                 else ""
             )
@@ -552,7 +550,7 @@ name:      {name}
 status:     {status_str}  
 monitor:    {monitor_str}    
 added:     {added_str}  
-reviewed:  {reviewed_str}\
+probed:  {probed_str}\
 """
 
         res = f"""\
@@ -574,7 +572,7 @@ def edit(position):
     idea = get_idea_by_position(position)
     click_log(f"starting with {idea = }")
     if idea:
-        id, name, status, monitor, added_, reviewed_, content = idea
+        id, name, status, monitor, added_, probed_, content = idea
         new_name, new_content = edit_content_with_nvim(name, content)
         click_log(f"{position = }; {id = }; {new_name = }; {new_content = }")
         update_idea(position, new_name, new_content, None, None, None, timestamp())

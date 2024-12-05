@@ -47,7 +47,7 @@ def create_table():
             status INTEGER,
             monitor INTEGER,
             added INTEGER,
-            reviewed INTEGER,
+            probed INTEGER,
             id INTEGER PRIMARY KEY
         )"""
     )
@@ -63,9 +63,9 @@ def initialize_settings():
     if c.fetchone()[0] == 0:
         with conn:
             c.execute(
-                # """INSERT INTO ideas (name, content, status, monitor, added, reviewed)
+                # """INSERT INTO ideas (name, content, status, monitor, added, probed)
                 #    VALUES ('settings', '', None, None, 0, 0)"""
-                f"""INSERT INTO ideas (name, content, monitor, status, added, reviewed, id)
+                f"""INSERT INTO ideas (name, content, monitor, status, added, probed, id)
                    VALUES ('settings', '', {default_monitor_setting}, {default_status_setting}, 0, 0, 0)"""
             )
 
@@ -86,7 +86,7 @@ initialize_settings()
 #     monitor,
 #     status,
 #     added,
-#     reviewed,
+#     probed,
 #     id,
 #     ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
 # FROM ideas
@@ -119,7 +119,7 @@ SELECT
     monitor,
     status,
     added,
-    reviewed,
+    probed,
     id,
     ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
 FROM ideas
@@ -266,7 +266,7 @@ def get_ideas_from_view() -> List[Tuple]:
 
     # Construct the full query
     query = f"""\
-SELECT id, name, status, monitor, added, reviewed, position
+SELECT id, name, status, monitor, added, probed, position
 FROM idea_positions
 WHERE {where_clause}\
     """
@@ -320,10 +320,10 @@ def insert_idea(
     status: int,
     monitor: int,
     added: int = timestamp(),
-    reviewed: int = timestamp(),
+    probed: int = timestamp(),
 ):
     """Insert a new idea into the database."""
-    reviewed = reviewed if reviewed is not None else added
+    probed = probed if probed is not None else added
 
     # Determine the next position
     # c.execute("SELECT MAX(position) FROM ideas")
@@ -332,8 +332,8 @@ def insert_idea(
 
     with conn:
         c.execute(
-            """INSERT INTO ideas (name, content, status, monitor, added, reviewed)
-               VALUES (:name, :content, :status, :monitor, :added, :reviewed)""",
+            """INSERT INTO ideas (name, content, status, monitor, added, probed)
+               VALUES (:name, :content, :status, :monitor, :added, :probed)""",
             {
                 # "position": position,
                 "name": name,
@@ -341,7 +341,7 @@ def insert_idea(
                 "status": status,
                 "monitor": monitor,
                 "added": added,
-                "reviewed": reviewed,
+                "probed": probed,
             },
         )
         sqlite3.register_adapter
@@ -360,7 +360,7 @@ def get_idea_by_position(position: int):
         return
 
     c.execute(
-        f"""SELECT id, name, status, monitor, added, reviewed, content 
+        f"""SELECT id, name, status, monitor, added, probed, content 
         FROM ideas 
         WHERE id={idea_id}"""
     )
@@ -388,7 +388,7 @@ def update_idea(
     status: Optional[int] = None,
     monitor: Optional[int] = None,
     added: Optional[int] = None,
-    reviewed: Optional[int] = None,
+    probed: Optional[int] = None,
 ):
     try:
         # Get the ID from the position
@@ -398,8 +398,8 @@ def update_idea(
         return
     # Build the base query and parameters
     base_query = "UPDATE ideas SET "
-    updates = ["reviewed = :reviewed"]
-    params = {"id": idea_id, "reviewed": reviewed if not None else timestamp()}
+    updates = ["probed = :probed"]
+    params = {"id": idea_id, "probed": probed if not None else timestamp()}
 
     # Append non-None fields to the updates list and params dict
     if name is not None:
@@ -417,9 +417,9 @@ def update_idea(
     if added is not None:
         updates.append("added = :added")
         params["added"] = added
-    # if reviewed is not None:
-    #     updates.append("reviewed = :reviewed")
-    #     params["reviewed"] = reviewed
+    # if probed is not None:
+    #     updates.append("probed = :probed")
+    #     params["probed"] = probed
 
     # Join updates to form the full query and add the WHERE clause
     query = f"{base_query} {', '.join(updates)} WHERE id = :id"
@@ -441,8 +441,8 @@ def review_idea(position: int):
 
     with conn:
         c.execute(
-            "UPDATE ideas SET reviewed = :reviewed WHERE id = :id",
-            {"id": idea_id, "reviewed": timestamp()},
+            "UPDATE ideas SET probed = :probed WHERE id = :id",
+            {"id": idea_id, "probed": timestamp()},
         )
 
 
@@ -489,40 +489,40 @@ def get_current_timestamp() -> int:
 def backup_with_conditions(
     source_db: str, backup_dir: str, retention: int = 7, backup_interval_days: int = 1
 ):
-    """keep 'last_backup' in the column 'added' and 'next_backup' in the column 'reviewed'"""
+    """keep 'last_backup' in the column 'added' and 'next_backup' in the column 'probed'"""
     click_log("how now?")
     conn = sqlite3.connect(source_db)
     c = conn.cursor()
 
-    # Get added and reviewed from row 0
-    c.execute("SELECT added, reviewed FROM ideas WHERE id = 0")
+    # Get added and probed from row 0
+    c.execute("SELECT added, probed FROM ideas WHERE id = 0")
     row = c.fetchone()
-    added, reviewed = row if row else (None, None)
+    added, probed = row if row else (None, None)
 
     # Get current timestamps
     current_timestamp = get_current_timestamp()
     db_last_modified = get_file_last_modified(source_db)
 
     click_log(
-        f"Current: {current_timestamp}, DB Last Modified: {db_last_modified}, Last Backup: {added}, Next Backup: {reviewed}"
+        f"Current: {current_timestamp}, DB Last Modified: {db_last_modified}, Last Backup: {added}, Next Backup: {probed}"
     )
 
     # Initialize backup settings if they are None
-    if added is None or reviewed is None:
+    if added is None or probed is None:
         added = db_last_modified
-        reviewed = added + (backup_interval_days * 86400)  # Convert days to seconds
+        probed = added + (backup_interval_days * 86400)  # Convert days to seconds
         c.execute(
-            "UPDATE ideas SET added = ?, reviewed = ? WHERE id = 0", (added, reviewed)
+            "UPDATE ideas SET added = ?, probed = ? WHERE id = 0", (added, probed)
         )
         conn.commit()
         print(
-            f"Initialized backup settings: Last Backup: {added}, Next Backup: {reviewed}"
+            f"Initialized backup settings: Last Backup: {added}, Next Backup: {probed}"
         )
         conn.close()
         return
 
     # Check if backup is needed
-    if current_timestamp > reviewed and db_last_modified > added:
+    if current_timestamp > probed and db_last_modified > added:
         print("Backup is due and the database has changed. Starting backup process...")
 
         # Perform the backup
@@ -530,12 +530,12 @@ def backup_with_conditions(
 
         # Update the backup timestamps
         added = db_last_modified
-        reviewed = added + (backup_interval_days * 86400)
+        probed = added + (backup_interval_days * 86400)
         c.execute(
-            "UPDATE ideas SET added = ?, reviewed = ? WHERE id = 0", (added, reviewed)
+            "UPDATE ideas SET added = ?, probed = ? WHERE id = 0", (added, probed)
         )
         conn.commit()
-        print(f"Backup completed. Last Backup: {added}, Next Backup: {reviewed}")
+        print(f"Backup completed. Last Backup: {added}, Next Backup: {probed}")
     else:
         print("Backup not needed at this time.")
 
