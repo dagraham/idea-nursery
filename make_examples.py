@@ -24,7 +24,7 @@ num_items = 18
 onehour = 60 * 60  # in seconds
 oneday = 24 * onehour  # in seconds
 now = round(datetime.now().timestamp())
-times = [now - x for x in range(oneday, 20 * oneday, onehour)]
+times = [now - x for x in range(oneday, 16 * oneday, onehour)]
 
 
 def reviewed(times, added):

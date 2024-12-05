@@ -204,8 +204,8 @@ def skip_show_units(seconds: int, num: int = 1):
 def format_timedelta(
     total_seconds: int, num: int = 1, color_type: int = 1, use_colors=False
 ) -> str:
-    if total_seconds == 0:
-        return "0m"
+    # if total_seconds == 0:
+    #     return "0m"
     sign = ""
     if total_seconds < 0:
         sign = "-"
@@ -242,6 +242,8 @@ def format_timedelta(
             weeks = weeks % 52
             if "weeks" in skip and weeks >= 26:
                 years += 1
+    else:
+        seconds = 0
     if "years" in show:
         until.append(f"{years}y")
     if "weeks" in show:
@@ -255,7 +257,7 @@ def format_timedelta(
     if "seconds" in show:
         until.append(f"{seconds}s")
     if not until:
-        until.append("0m")
+        until.append("0s")
     ret = f"{sign}{''.join(until)}"
     click_log(f"{ret = }")
 

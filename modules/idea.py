@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import shlex
+import sqlite3
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -22,11 +23,13 @@ from rich.table import Table
 from modules.database import (
     create_view,
     delete_idea,
+    get_find,
     get_idea_by_position,
     get_ideas_from_view,
     get_view_settings,
     insert_idea,
     review_idea,
+    set_find,
     set_hide_encoded,
     set_show_encoded,
     update_idea,
@@ -55,13 +58,13 @@ status_names = ["inkling", "notion", "thought", "idea"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
 valid_status = [i for i in range(len(status_names))]
-status_filters = (
+status_finds = (
     [f"+{name}" for name in status_names]
     + [f"-{name}" for name in status_names]
     + ["clear"]
 )
-status_filter_to_pos = {value: pos for pos, value in enumerate(status_filters)}
-status_pos_to_filter = {pos: value for pos, value in enumerate(status_filters)}
+status_find_to_pos = {value: pos for pos, value in enumerate(status_finds)}
+status_pos_to_find = {pos: value for pos, value in enumerate(status_finds)}
 
 # monitor_names = ["paused", "active", "available"]
 monitor_names = ["paused", "active"]
@@ -70,13 +73,13 @@ monitor_colors = ["#938856", "#c4a72f"]
 monitor_pos_to_str = {pos: value for pos, value in enumerate(monitor_names)}
 monitor_str_to_pos = {value: pos for pos, value in enumerate(monitor_names)}
 valid_monitor = [i for i in range(len(monitor_names))]
-monitor_filters = (
+monitor_finds = (
     [f"+{name}" for name in monitor_names]
     + [f"-{name}" for name in monitor_names]
     + ["clear"]
 )
-monitor_filter_to_pos = {value: pos for pos, value in enumerate(monitor_filters)}
-monitor_pos_to_filter = {pos: value for pos, value in enumerate(monitor_filters)}
+monitor_find_to_pos = {value: pos for pos, value in enumerate(monitor_finds)}
+monitor_pos_to_find = {pos: value for pos, value in enumerate(monitor_finds)}
 
 age_alert_seconds = 4 * 60 * 60  # 1 hour
 age_notice_seconds = 2 * 60 * 60  # 30 minutes
@@ -150,6 +153,31 @@ def process_batch_file(file_path: str):
                 except Exception as e:
                     console.print(f"[red]Unexpected error: {e}[/red]")
                     console.print(f"Executing command: {command = }; {args = }")
+
+
+@cli.command("find", short_help="Find ideas by name or content.")
+@click.argument("pattern", type=str)
+def find(pattern: str):
+    """
+    Find ideas where name or content matches the given pattern.
+    """
+    # Build the SQL filter condition
+    filter_condition = f"name LIKE '%{pattern}%' OR content LIKE '%{pattern}%'"
+
+    set_find((f"name or content LIKE {pattern}" if pattern else None))
+
+    # Recreate the view with the filter
+    create_view(filter_condition)
+
+    # Display the filtered rows
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute("SELECT * FROM idea_positions").fetchall()
+    _list_all()
+    # for row in rows:
+    #     click.echo(row)
+
+
+# filter("modi")
 
 
 @cli.command("set-home")
@@ -229,22 +257,6 @@ def add(
     _list_all()
 
 
-# @cli.command(short_help="Updates data for idea")
-# @click.argument("position", type=int)
-# @click.option("--name")
-# @click.option("--content", type=str, help="Content of the idea")
-# @click.option(
-#     "--status",
-#     type=click.Choice([r for r in status_names]),
-#     default=None,
-#     help="status of the idea",
-# )
-# @click.option(
-#     "--monitor",
-#     type=click.Choice([s for s in monitor_names]),
-#     default=None,
-#     help="monitor of the idea",
-# )
 def update(
     position: int,
     name: str = None,
@@ -268,10 +280,10 @@ def update(
     _list_all()
 
 
-@cli.command(short_help="Toggles monitor between active and paused for idea")
+@cli.command(short_help="Toggles monitor status between paused and active for idea")
 @click.argument("position", type=int)
-def toggle(position: int):
-    """If idea at POSITION is active then pause it else if paused then activate it."""
+def pause(position: int):
+    """If idea at POSITION is active then pause it else if paused then activate it. When an idea is paused the times since added and since reviewed are saved and then restored when/if the idea is activated again."""
     position = int(position)
     idea = get_idea_by_position(position)
     click_log(f"{idea = }")
@@ -346,28 +358,29 @@ def delete(position):
     _list_all()
 
 
-@cli.command(short_help="Focus on ideas based on their status properties")
-@click.option(
-    "--status",
-    type=click.Choice([r for r in status_filters]),
-    help=f"With, e.g., '+{status_names[0]}' only show ideas with status '{status_names[0]}'. With '-{status_names[0]}' only show ideas that do NOT have status '{status_names[0]}'. 'clear' removes the status focus.",
-)
-@click.option(
-    "--monitor",
-    type=click.Choice([s for s in monitor_filters]),
-    help=f"With, e.g., '+{monitor_names[0]}' only show ideas with monitor '{monitor_names[0]}'. With '-{monitor_names[0]}' only show ideas that do NOT have monitor '{monitor_names[0]}'. 'clear' removes the monitor focus.",
-)
-def focus(monitor: str = None, status: str = None):
-    """Set or clear focus."""
-    current_settings = get_view_settings()
-    # Update settings based on user input
-
-    if monitor is not None:
-        current_monitor = monitor_filter_to_pos[monitor]
-    if status is not None:
-        current_status = status_filter_to_pos[status]
-    set_view_settings(current_monitor, current_status)
-    _list_all()
+# @cli.command(short_help="Focus on ideas based on their status properties")
+# @click.option(
+#     "--status",
+#     type=click.Choice([r for r in status_finds]),
+#     help=f"With, e.g., '+{status_names[0]}' only show ideas with status '{status_names[0]}'. With '-{status_names[0]}' only show ideas that do NOT have status '{status_names[0]}'. 'clear' removes the status focus.",
+# )
+# @click.option(
+#     "--monitor",
+#     type=click.Choice([s for s in monitor_finds]),
+#     help=f"With, e.g., '+{monitor_names[0]}' only show ideas with monitor '{monitor_names[0]}'. With '-{monitor_names[0]}' only show ideas that do NOT have monitor '{monitor_names[0]}'. 'clear' removes the monitor focus.",
+# )
+# def focus(monitor: str = None, status: str = None):
+#     """Set or clear focus."""
+#     current_settings = get_view_settings()
+#     # Update settings based on user input
+#
+#     if monitor is not None:
+#         current_monitor = monitor_find_to_pos[monitor]
+#     if status is not None:
+#         current_status = status_find_to_pos[status]
+#     set_view_settings(current_monitor, current_status)
+#     _list_all()
+#
 
 
 @cli.command(short_help="Show ideas based on their status names")
@@ -426,19 +439,37 @@ def _list_all():
     ideas, show_list = get_ideas_from_view()
     click_log(f"{ideas = }; {show_list = }")
 
-    caption_elements = []
-    # if int(current_monitor) < len(monitor_pos_to_filter.keys()) - 1:
-    #     caption_elements.append(
-    #         f"--monitor {monitor_pos_to_filter.get(current_monitor)}"
-    #     )
-    if show_list:
-        hide_list = [x for x in [0, 1, 2, 3] if x not in show_list]
-        for pos in hide_list:
-            caption_elements.append(f"{status_names[pos]}")
+    hide = []
 
-    caption = ""
-    if caption_elements:
-        caption = f"hidden: {', '.join(caption_elements)}"
+    if show_list:
+        hidden = [x for x in [0, 1, 2, 3] if x not in show_list]
+        for pos in hidden:
+            hide.append(f"{status_names[pos]}")
+
+    if len(hide) >= 3:
+        hide_str = f"{', '.join(hide[:-1])} or {hide[-1]}"
+    elif len(hide) >= 2:
+        hide_str = f"{' or '.join(hide)}"
+    elif hide:
+        hide_str = f"{hide[0]}"
+    else:
+        hide_str = ""
+
+    hiding = f"hiding ideas with status {hide_str}" if hide_str else ""
+
+    find = get_find()
+    showing = f"showing ideas with {find}" if find else ""
+
+    click_log(f"showing = '{showing}'; hiding = '{hiding}'")
+
+    if showing and hiding:
+        caption = f"{showing} but {hiding}"
+    elif showing:
+        caption = showing
+    elif hide_str:
+        caption = hiding
+    else:
+        caption = ""
 
     # Render the table
     console.clear()
@@ -454,9 +485,9 @@ def _list_all():
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("name", min_width=24)
     # table.add_column("monitor", width=6, justify="center")
-    table.add_column("status", width=6, justify="center")
-    table.add_column("added", width=6, justify="center")
-    table.add_column("reviewed", width=6, justify="center")
+    table.add_column("status", width=7, justify="center")
+    table.add_column("added", width=7, justify="center")
+    table.add_column("reviewed", width=7, justify="center")
 
     for idx, idea in enumerate(ideas, start=1):
         click_log(f"{idx = }; {idea = }; {type(idea) = }")
@@ -537,8 +568,8 @@ reviewed:  {reviewed_str}\
 
 @cli.command(short_help="Review and edit name and content for idea in nvim")
 @click.argument("position", type=int)
-def review(position):
-    """Review/Edit name and content for idea at POSITION."""
+def edit(position):
+    """Edit name and content for idea at POSITION."""
     console.clear()
     idea = get_idea_by_position(position)
     click_log(f"starting with {idea = }")

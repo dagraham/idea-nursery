@@ -1,13 +1,4 @@
 import os
-import sqlite3
-from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
-
-import click
-
-from modules.model import click_log, timestamp
-
-from . import backup_dir, db_path, idea_home, log_dir
 
 # original_makedirs = os.makedirs
 #
@@ -19,8 +10,27 @@ from . import backup_dir, db_path, idea_home, log_dir
 #
 #
 # os.makedirs = safe_makedirs
+import re
+import sqlite3
+from datetime import datetime, timedelta
+from typing import List, Optional, Tuple
 
+import click
+
+from modules.model import click_log, timestamp
+
+from . import backup_dir, db_path, idea_home, log_dir
+
+
+# Define a regex function for SQLite
+def regexp(expr, item):
+    return re.search(expr, item, re.IGNORECASE) is not None
+
+
+# Register the regex function with SQLite
 conn = sqlite3.connect(db_path)
+conn.create_function("REGEXP", 2, regexp)
+# conn = sqlite3.connect(db_path)
 c = conn.cursor()
 
 default_status_setting = 0
@@ -63,11 +73,44 @@ def initialize_settings():
 initialize_settings()
 
 
-def create_view():
+# def create_view():
+#     # Drop the view if it already exists
+#     c.execute("DROP VIEW IF EXISTS idea_positions")
+#
+#     # Create the SQL query dynamically
+#     query = """\
+# CREATE VIEW idea_positions AS
+# SELECT
+#     name,
+#     content,
+#     monitor,
+#     status,
+#     added,
+#     reviewed,
+#     id,
+#     ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
+# FROM ideas
+#     """
+#     click_log(f"{query = }")
+#     res = c.execute(query)
+#     click_log(f"{res.fetchall() = }")
+#
+
+# create_view()
+
+
+def create_view(filter_condition=None):
+    """
+    Create the 'idea_positions' view, optionally with a filter condition.
+    """
+    # Connect to the database
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
     # Drop the view if it already exists
     c.execute("DROP VIEW IF EXISTS idea_positions")
 
-    # Create the SQL query dynamically
+    # Base SQL query
     query = """\
 CREATE VIEW idea_positions AS
 SELECT 
@@ -80,34 +123,39 @@ SELECT
     id,
     ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
 FROM ideas
-    """
-    click_log(f"{query = }")
-    res = c.execute(query)
-    click_log(f"{res.fetchall() = }")
-    # ROW_NUMBER() OVER (ORDER BY monitor, status, reviewed, id) AS position
+"""
+
+    # Append the WHERE clause if a filter condition is provided
+    if filter_condition:
+        query += f"WHERE {filter_condition} "
+
+    c.execute(query)
+    conn.commit()
 
 
 create_view()
 
 
-# def get_view_settings() -> Tuple[int | None]:
-#     """Fetch the current view settings."""
-#     c.execute("SELECT monitor, status FROM ideas WHERE id = 0")
-#     result = c.fetchone()
-#     with open("debug.log", "a") as debug_file:
-#         click.echo(f"get_view_settings: {result = }", file=debug_file)
-#     # return result if result else (default_monitor_setting, default_status_setting)
-#     return result if result else (6, 8)
-#
-#
-# def set_view_settings(monitor: Optional[int] = 2, status: Optional[int] = 4):
-#     """Update the current view settings."""
-#     with conn:
-#         c.execute(
-#             "UPDATE ideas SET monitor = :monitor, status = :status WHERE id = 0",
-#             {"monitor": monitor, "status": status},
-#         )
-#
+def set_find(pattern: str):
+    """Store pattern in content for id=0"""
+    with conn:
+        c.execute(
+            "UPDATE ideas SET content = :content WHERE id = 0",
+            {"content": pattern},
+        )
+
+
+def get_find():
+    """
+    Fetch the current find pattern from content in idea id 0.
+    """
+    c.execute("SELECT content FROM ideas WHERE id = 0")
+    result = c.fetchone()[0]
+    click_log(f"{result = }")
+    if result:
+        return result
+    else:
+        return None
 
 
 def set_hide_encoded(lst: List[int]):
@@ -204,26 +252,6 @@ def get_ideas_from_view() -> List[Tuple]:
     click_log(f"{show_binaries = }")
     show_list = pos_from_show_binaries(show_binaries)
     click_log(f"{show_list = }")
-
-    # Determine filters
-
-    # # Add monitor filter if applicable
-    # if (
-    #     current_monitor is not None and current_monitor < 6
-    # ):  # Apply filter only if monitor < 6
-    #     if current_monitor // 3 == 0:
-    #         where_clauses.append(f"monitor = {current_monitor % 3}")
-    #     elif current_monitor // 3 == 1:
-    #         where_clauses.append(f"monitor != {current_monitor % 3}")
-    #
-    # # Add status filter if applicable
-    # if (
-    #     current_monitor is not None and current_status < 8
-    # ):  # Apply filter only if status < 8
-    #     if current_status // 4 == 0:
-    #         where_clauses.append(f"status = {current_status % 4}")
-    #     elif current_status // 4 == 1:
-    #         where_clauses.append(f"status != {current_status % 4}")
 
     # status_list = [1, 3]  # List of integers for filtering
     where_clauses = ["id > 0"]  # Always skip row 0
