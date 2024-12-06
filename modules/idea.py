@@ -66,20 +66,20 @@ status_finds = (
 status_find_to_pos = {value: pos for pos, value in enumerate(status_finds)}
 status_pos_to_find = {pos: value for pos, value in enumerate(status_finds)}
 
-# monitor_names = ["paused", "active", "available"]
-monitor_names = ["paused", "active"]
-# monitor_colors = ["#938856", "#c4a72f", "#f5c608"]
-monitor_colors = ["#938856", "#c4a72f"]
-monitor_pos_to_str = {pos: value for pos, value in enumerate(monitor_names)}
-monitor_str_to_pos = {value: pos for pos, value in enumerate(monitor_names)}
-valid_monitor = [i for i in range(len(monitor_names))]
-monitor_finds = (
-    [f"+{name}" for name in monitor_names]
-    + [f"-{name}" for name in monitor_names]
+# state_names = ["paused", "active", "available"]
+state_names = ["paused", "active"]
+# state_colors = ["#938856", "#c4a72f", "#f5c608"]
+state_colors = ["#938856", "#c4a72f"]
+state_pos_to_str = {pos: value for pos, value in enumerate(state_names)}
+state_str_to_pos = {value: pos for pos, value in enumerate(state_names)}
+valid_state = [i for i in range(len(state_names))]
+state_finds = (
+    [f"+{name}" for name in state_names]
+    + [f"-{name}" for name in state_names]
     + ["clear"]
 )
-monitor_find_to_pos = {value: pos for pos, value in enumerate(monitor_finds)}
-monitor_pos_to_find = {pos: value for pos, value in enumerate(monitor_finds)}
+state_find_to_pos = {value: pos for pos, value in enumerate(state_finds)}
+state_pos_to_find = {pos: value for pos, value in enumerate(state_finds)}
 
 age_alert_seconds = 4 * 60 * 60  # 1 hour
 age_notice_seconds = 2 * 60 * 60  # 30 minutes
@@ -218,10 +218,10 @@ home:    [green]{idea_home}[/green]
     help="status of the idea",
 )
 @click.option(
-    "--monitor",
-    type=click.Choice([s for s in monitor_names]),
-    default=monitor_names[1],
-    help="monitor of the idea",
+    "--state",
+    type=click.Choice([s for s in state_names]),
+    default=state_names[1],
+    help="state of the idea",
 )
 @click.option(
     "--added",
@@ -239,7 +239,7 @@ def add(
     name: str,
     content: str = "",
     status: str = "inkling",
-    monitor: str = "active",
+    state: str = "active",
     added: int = timestamp(),
     probed: int = timestamp(),
 ):
@@ -250,7 +250,7 @@ def add(
         name=full_name,
         content=content,
         status=status_str_to_pos[status],
-        monitor=monitor_str_to_pos[monitor],
+        state=state_str_to_pos[state],
         added=added,
         probed=probed,
     )
@@ -261,10 +261,10 @@ def update(
     position: int,
     name: str = None,
     content: str = None,
-    monitor: int = None,
+    state: int = None,
     status: int = None,
 ):
-    """Update NAME, CONTENT, status, and/or monitor for idea at POSITION."""
+    """Update NAME, CONTENT, status, and/or state for idea at POSITION."""
     # Print debug information
     # Call the database function to handle the deletion
     update_idea(
@@ -272,7 +272,7 @@ def update(
         name,
         content,
         status_str_to_pos[status] if status is not None else None,
-        monitor_str_to_pos[monitor] if monitor is not None else None,
+        state_str_to_pos[state] if state is not None else None,
         None,
         timestamp(),
     )
@@ -280,7 +280,7 @@ def update(
     _list_all()
 
 
-@cli.command(short_help="Toggles monitor status between paused and active for idea")
+@cli.command(short_help="Toggles state status between paused and active for idea")
 @click.argument("position", type=int)
 def pause(position: int):
     """If idea at POSITION is active then pause it else if paused then activate it. When an idea is paused the times since added and since probed are saved and then restored when/if the idea is activated again."""
@@ -288,12 +288,12 @@ def pause(position: int):
     idea = get_idea_by_position(position)
     click_log(f"{idea = }")
     if idea:
-        id, name, status, monitor, added, probed, content_ = idea
-        click_log(f"{monitor = }; {type(monitor) = }")
+        id, name, status, state, added, probed, content_ = idea
+        click_log(f"{state = }; {type(state) = }")
         now = timestamp()
         new_added = now - added
         new_probed = now - probed
-        new_monitor = 0 if monitor == 1 else 1
+        new_state = 0 if state == 1 else 1
 
         click_log(f"{new_added = }; {added = }; {new_probed = }; {probed = }; {now = }")
         update_idea(
@@ -301,7 +301,7 @@ def pause(position: int):
             None,
             None,
             None,
-            new_monitor,  # monitor 1 -> 0
+            new_state,  # state 1 -> 0
             new_added,  # to restore later
             new_probed,  # to restore later
         )
@@ -321,7 +321,7 @@ def status(position: int, status: str):
     idea = get_idea_by_position(position)
     if idea:
         click_log(f"{idea = }")
-        id, name, old_status, monitor, added, probed, content_ = idea
+        id, name, old_status, state, added, probed, content_ = idea
         new_status = status_str_to_pos[status]
         if new_status == old_status:
             console.print(
@@ -336,7 +336,7 @@ def status(position: int, status: str):
             None,
             None,
             new_status,
-            None,  # monitor 1 -> 0
+            None,  # state 1 -> 0
             None,  # to restore later
             timestamp(),  # to restore later
         )
@@ -363,20 +363,20 @@ def delete(position):
 #     help=f"With, e.g., '+{status_names[0]}' only show ideas with status '{status_names[0]}'. With '-{status_names[0]}' only show ideas that do NOT have status '{status_names[0]}'. 'clear' removes the status focus.",
 # )
 # @click.option(
-#     "--monitor",
-#     type=click.Choice([s for s in monitor_finds]),
-#     help=f"With, e.g., '+{monitor_names[0]}' only show ideas with monitor '{monitor_names[0]}'. With '-{monitor_names[0]}' only show ideas that do NOT have monitor '{monitor_names[0]}'. 'clear' removes the monitor focus.",
+#     "--state",
+#     type=click.Choice([s for s in state_finds]),
+#     help=f"With, e.g., '+{state_names[0]}' only show ideas with state '{state_names[0]}'. With '-{state_names[0]}' only show ideas that do NOT have state '{state_names[0]}'. 'clear' removes the state focus.",
 # )
-# def focus(monitor: str = None, status: str = None):
+# def focus(state: str = None, status: str = None):
 #     """Set or clear focus."""
 #     current_settings = get_view_settings()
 #     # Update settings based on user input
 #
-#     if monitor is not None:
-#         current_monitor = monitor_find_to_pos[monitor]
+#     if state is not None:
+#         current_state = state_find_to_pos[state]
 #     if status is not None:
 #         current_status = status_find_to_pos[status]
-#     set_view_settings(current_monitor, current_status)
+#     set_view_settings(current_state, current_status)
 #     _list_all()
 #
 
@@ -482,16 +482,16 @@ def _list_all():
     )
     table.add_column("#", style="dim", min_width=1, justify="right")
     table.add_column("name", min_width=24)
-    # table.add_column("monitor", width=6, justify="center")
+    # table.add_column("state", width=6, justify="center")
     table.add_column("status", width=6, justify="center")
     table.add_column("added", width=6, justify="center")
     table.add_column("probed", width=6, justify="center")
 
     for idx, idea in enumerate(ideas, start=1):
         click_log(f"{idx = }; {idea = }; {type(idea) = }")
-        id_, name, status, monitor, added_, probed_, position_ = idea
+        id_, name, status, state, added_, probed_, position_ = idea
         click_log(f"{id_ = }; {name = }; {status = }")
-        if monitor == 1:
+        if state == 1:
             age = f"{format_timedelta(timestamp() - added_, num=2, color_type=status, use_colors=True)}"
             idle = f"{format_timedelta(timestamp() - probed_, num=2, color_type=4, use_colors=True)}"
         else:
@@ -500,7 +500,7 @@ def _list_all():
         table.add_row(
             str(idx),
             f"[{status_colors[status]}]{name}",
-            # f"[{monitor_colors[monitor]}]{monitor_pos_to_str[monitor]}",
+            # f"[{state_colors[state]}]{state_pos_to_str[state]}",
             f"[{status_colors[status]}]{status_pos_to_str[status]}",
             f"{age}",
             f"{idle}",
@@ -518,18 +518,16 @@ def details(position):
     click_log(f"idea from {position = }: {idea}")
 
     if idea:
-        id, name, status, monitor, added, probed, content = idea
+        id, name, status, state, added, probed, content = idea
         status_str = (
             f"{status:<14} ({status_pos_to_str[status]})" if status is not None else ""
         )
-        monitor_str = (
-            f"{monitor:<14} ({monitor_pos_to_str[monitor]})"
-            if monitor is not None
-            else ""
+        state_str = (
+            f"{state:<14} ({state_pos_to_str[state]})" if state is not None else ""
         )
         added_str = (
             f"{added:<14} ({format_timedelta(now - added, num=2)} ago at {format_datetime(added)})"
-            if added is not None and monitor == 1
+            if added is not None and state == 1
             else (
                 f"{added:<14} ({format_timedelta(added, num=2)} ago at {format_datetime(now - added)})"
                 if added is not None
@@ -538,7 +536,7 @@ def details(position):
         )
         probed_str = (
             f"{probed:<14} ({format_timedelta(now - probed, num=2)} ago at {format_datetime(probed)})"
-            if probed is not None and monitor == 1
+            if probed is not None and state == 1
             else (
                 f"{probed:<14} ({format_timedelta(probed, num=2)} ago at {format_datetime(now - probed)})"
                 if added is not None
@@ -548,7 +546,7 @@ def details(position):
         meta = f"""\
 name:      {name}
 status:     {status_str}  
-monitor:    {monitor_str}    
+state:    {state_str}    
 added:     {added_str}  
 probed:  {probed_str}\
 """
@@ -572,7 +570,7 @@ def edit(position):
     idea = get_idea_by_position(position)
     click_log(f"starting with {idea = }")
     if idea:
-        id, name, status, monitor, added_, probed_, content = idea
+        id, name, status, state, added_, probed_, content = idea
         new_name, new_content = edit_content_with_nvim(name, content)
         click_log(f"{position = }; {id = }; {new_name = }; {new_content = }")
         update_idea(position, new_name, new_content, None, None, None, timestamp())

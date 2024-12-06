@@ -34,7 +34,7 @@ conn.create_function("REGEXP", 2, regexp)
 c = conn.cursor()
 
 default_status_setting = 0
-default_monitor_setting = 0
+default_state_setting = 0
 pos_to_id = {}
 
 
@@ -45,7 +45,7 @@ def create_table():
             name TEXT,
             content TEXT,
             status INTEGER,
-            monitor INTEGER,
+            state INTEGER,
             added INTEGER,
             probed INTEGER,
             id INTEGER PRIMARY KEY
@@ -63,10 +63,10 @@ def initialize_settings():
     if c.fetchone()[0] == 0:
         with conn:
             c.execute(
-                # """INSERT INTO ideas (name, content, status, monitor, added, probed)
+                # """INSERT INTO ideas (name, content, status, state, added, probed)
                 #    VALUES ('settings', '', None, None, 0, 0)"""
-                f"""INSERT INTO ideas (name, content, monitor, status, added, probed, id)
-                   VALUES ('settings', '', {default_monitor_setting}, {default_status_setting}, 0, 0, 0)"""
+                f"""INSERT INTO ideas (name, content, state, status, added, probed, id)
+                   VALUES ('settings', '', {default_state_setting}, {default_status_setting}, 0, 0, 0)"""
             )
 
 
@@ -83,12 +83,12 @@ initialize_settings()
 # SELECT
 #     name,
 #     content,
-#     monitor,
+#     state,
 #     status,
 #     added,
 #     probed,
 #     id,
-#     ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
+#     ROW_NUMBER() OVER (ORDER BY state, status, id) AS position
 # FROM ideas
 #     """
 #     click_log(f"{query = }")
@@ -116,12 +116,12 @@ CREATE VIEW idea_positions AS
 SELECT 
     name,
     content,
-    monitor,
+    state,
     status,
     added,
     probed,
     id,
-    ROW_NUMBER() OVER (ORDER BY monitor, status, id) AS position
+    ROW_NUMBER() OVER (ORDER BY state, status, id) AS position
 FROM ideas
 """
 
@@ -161,8 +161,8 @@ def get_find():
 def set_hide_encoded(lst: List[int]):
     """
     Converts list of status HIDE positions to an encoded integer representing a list of binaries where a 1's mean hide and 0's show.
-    Positions correspond to 0-3: status[seed, sprout, seedling, plant], 4: monitor. In 0-3, 0/1 mean show/hide ideas with that status.
-    In 4, 0/1 means show/hide items with monitor value 0 (paused). This integer is stored as "status" for item id 0.
+    Positions correspond to 0-3: status[seed, sprout, seedling, plant], 4: state. In 0-3, 0/1 mean show/hide ideas with that status.
+    In 4, 0/1 means show/hide items with state value 0 (paused). This integer is stored as "status" for item id 0.
     """
     ret = []
     for x in [0, 1, 2, 3]:
@@ -181,8 +181,8 @@ def set_hide_encoded(lst: List[int]):
 def set_show_encoded(lst: List[int]):
     """
     Converts list of status SHOW positions to an encoded integer representing a list of binaries where a 1's mean hide and 0's show.
-    Positions correspond to 0-3: status[seed, sprout, seedling, plant], 4: monitor. In 0-3, 0/1 mean show/hide ideas with that status.
-    In 4, 0/1 means show/hide items with monitor value 0 (paused). This integer is stored as "status" for item id 0.
+    Positions correspond to 0-3: status[seed, sprout, seedling, plant], 4: state. In 0-3, 0/1 mean show/hide ideas with that status.
+    In 4, 0/1 means show/hide items with state value 0 (paused). This integer is stored as "status" for item id 0.
     """
     ret = []
     for x in [0, 1, 2, 3]:
@@ -266,7 +266,7 @@ def get_ideas_from_view() -> List[Tuple]:
 
     # Construct the full query
     query = f"""\
-SELECT id, name, status, monitor, added, probed, position
+SELECT id, name, status, state, added, probed, position
 FROM idea_positions
 WHERE {where_clause}\
     """
@@ -318,7 +318,7 @@ def insert_idea(
     name: str,
     content: str,
     status: int,
-    monitor: int,
+    state: int,
     added: int = timestamp(),
     probed: int = timestamp(),
 ):
@@ -332,14 +332,14 @@ def insert_idea(
 
     with conn:
         c.execute(
-            """INSERT INTO ideas (name, content, status, monitor, added, probed)
-               VALUES (:name, :content, :status, :monitor, :added, :probed)""",
+            """INSERT INTO ideas (name, content, status, state, added, probed)
+               VALUES (:name, :content, :status, :state, :added, :probed)""",
             {
                 # "position": position,
                 "name": name,
                 "content": content,
                 "status": status,
-                "monitor": monitor,
+                "state": state,
                 "added": added,
                 "probed": probed,
             },
@@ -360,7 +360,7 @@ def get_idea_by_position(position: int):
         return
 
     c.execute(
-        f"""SELECT id, name, status, monitor, added, probed, content 
+        f"""SELECT id, name, status, state, added, probed, content 
         FROM ideas 
         WHERE id={idea_id}"""
     )
@@ -386,7 +386,7 @@ def update_idea(
     name: Optional[str] = None,
     content: Optional[str] = None,
     status: Optional[int] = None,
-    monitor: Optional[int] = None,
+    state: Optional[int] = None,
     added: Optional[int] = None,
     probed: Optional[int] = None,
 ):
@@ -411,9 +411,9 @@ def update_idea(
     if status is not None:
         updates.append("status = :status")
         params["status"] = status
-    if monitor is not None:
-        updates.append("monitor = :monitor")
-        params["monitor"] = monitor
+    if state is not None:
+        updates.append("state = :state")
+        params["state"] = state
     if added is not None:
         updates.append("added = :added")
         params["added"] = added
