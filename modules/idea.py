@@ -37,7 +37,9 @@ from modules.database import (
 from modules.model import (
     click_log,
     edit_content_with_nvim,
+    format_age_color,
     format_datetime,
+    format_idle_color,
     format_timedelta,
     is_valid_path,
     timestamp,
@@ -51,10 +53,7 @@ click_log(
     f"{idea_home = }; {backup_dir = }; {log_dir =}, {markdown_dir}, {db_path = }; {version = }"
 )
 
-# status_names = ["seed", "sprout", "seedling", "plant"]
-status_names = ["inkling", "notion", "thought", "idea"]
-# status_colors = ["#3e8b9b", "#7aaf6c", "#b5d23d", "#e8f115"]
-# status_colors = ["#47a35c", "#7aaf6c", "#b5d23d", "#e8f115"]
+status_names = ["inkling", "notion", "idea"]
 status_pos_to_str = {pos: value for pos, value in enumerate(status_names)}
 status_str_to_pos = {value: pos for pos, value in enumerate(status_names)}
 valid_status = [i for i in range(len(status_names))]
@@ -66,9 +65,7 @@ status_finds = (
 status_find_to_pos = {value: pos for pos, value in enumerate(status_finds)}
 status_pos_to_find = {pos: value for pos, value in enumerate(status_finds)}
 
-# state_names = ["paused", "active", "available"]
 state_names = ["paused", "active"]
-# state_colors = ["#938856", "#c4a72f", "#f5c608"]
 state_colors = ["#938856", "#c4a72f"]
 state_pos_to_str = {pos: value for pos, value in enumerate(state_names)}
 state_str_to_pos = {value: pos for pos, value in enumerate(state_names)}
@@ -171,13 +168,8 @@ def find(pattern: str):
 
     # Display the filtered rows
     conn = sqlite3.connect(db_path)
-    rows = conn.execute("SELECT * FROM idea_positions").fetchall()
+    # rows = conn.execute("SELECT * FROM idea_positions").fetchall()
     _list_all()
-    # for row in rows:
-    #     click.echo(row)
-
-
-# filter("modi")
 
 
 @cli.command("set-home")
@@ -286,16 +278,16 @@ def pause(position: int):
     """If idea at POSITION is active then pause it else if paused then activate it. When an idea is paused the times since added and since probed are saved and then restored when/if the idea is activated again."""
     position = int(position)
     idea = get_idea_by_position(position)
-    click_log(f"{idea = }")
+    # click_log(f"{idea = }")
     if idea:
         id, name, status, state, added, probed, content_ = idea
-        click_log(f"{state = }; {type(state) = }")
+        # click_log(f"{state = }; {type(state) = }")
         now = timestamp()
         new_added = now - added
         new_probed = now - probed
         new_state = 0 if state == 1 else 1
 
-        click_log(f"{new_added = }; {added = }; {new_probed = }; {probed = }; {now = }")
+        # click_log(f"{new_added = }; {added = }; {new_probed = }; {probed = }; {now = }")
         update_idea(
             position,
             None,
@@ -320,7 +312,7 @@ def status(position: int, status: str):
     """Set the value of status for idea at POSITION."""
     idea = get_idea_by_position(position)
     if idea:
-        click_log(f"{idea = }")
+        # click_log(f"{idea = }")
         id, name, old_status, state, added, probed, content_ = idea
         new_status = status_str_to_pos[status]
         if new_status == old_status:
@@ -329,7 +321,7 @@ def status(position: int, status: str):
             )
             return
 
-        click_log(f"{status = }")
+        # click_log(f"{status = }")
 
         update_idea(
             position,
@@ -354,31 +346,6 @@ def delete(position):
     delete_idea(position)
     # Refresh the list to reflect changes
     _list_all()
-
-
-# @cli.command(short_help="Focus on ideas based on their status properties")
-# @click.option(
-#     "--status",
-#     type=click.Choice([r for r in status_finds]),
-#     help=f"With, e.g., '+{status_names[0]}' only show ideas with status '{status_names[0]}'. With '-{status_names[0]}' only show ideas that do NOT have status '{status_names[0]}'. 'clear' removes the status focus.",
-# )
-# @click.option(
-#     "--state",
-#     type=click.Choice([s for s in state_finds]),
-#     help=f"With, e.g., '+{state_names[0]}' only show ideas with state '{state_names[0]}'. With '-{state_names[0]}' only show ideas that do NOT have state '{state_names[0]}'. 'clear' removes the state focus.",
-# )
-# def focus(state: str = None, status: str = None):
-#     """Set or clear focus."""
-#     current_settings = get_view_settings()
-#     # Update settings based on user input
-#
-#     if state is not None:
-#         current_state = state_find_to_pos[state]
-#     if status is not None:
-#         current_status = status_find_to_pos[status]
-#     set_view_settings(current_state, current_status)
-#     _list_all()
-#
 
 
 @cli.command(short_help="Show ideas based on their status names")
@@ -435,7 +402,7 @@ def _list_all():
     """List all ideas based on the current view settings."""
     # Fetch filtered ideas
     ideas, show_list = get_ideas_from_view()
-    click_log(f"{ideas = }; {show_list = }")
+    # click_log(f"{ideas = }; {show_list = }")
 
     hide = []
 
@@ -458,7 +425,7 @@ def _list_all():
     find = get_find()
     showing = f"showing ideas with {find}" if find else ""
 
-    click_log(f"showing = '{showing}'; hiding = '{hiding}'")
+    # click_log(f"showing = '{showing}'; hiding = '{hiding}'")
 
     if showing and hiding:
         caption = f"{showing} but {hiding}"
@@ -488,12 +455,14 @@ def _list_all():
     table.add_column("probed", width=6, justify="center")
 
     for idx, idea in enumerate(ideas, start=1):
-        click_log(f"{idx = }; {idea = }; {type(idea) = }")
+        # click_log(f"{idx = }; {idea = }; {type(idea) = }")
         id_, name, status, state, added_, probed_, position_ = idea
-        click_log(f"{id_ = }; {name = }; {status = }")
+        # click_log(f"{id_ = }; {name = }; {status = }")
         if state == 1:
-            age = f"{format_timedelta(timestamp() - added_, num=2, color_type=status, use_colors=True)}"
-            idle = f"{format_timedelta(timestamp() - probed_, num=2, color_type=4, use_colors=True)}"
+            age = f"{format_age_color(timestamp() - added_, num=2, color_type=status)}"
+            idle = (
+                f"{format_idle_color(timestamp() - probed_, num=2, color_type=status)}"
+            )
         else:
             idle = "~"
             age = "~"
@@ -515,7 +484,7 @@ def details(position):
     now = timestamp()
     console.clear()
     idea = get_idea_by_position(position)
-    click_log(f"idea from {position = }: {idea}")
+    # click_log(f"idea from {position = }: {idea}")
 
     if idea:
         id, name, status, state, added, probed, content = idea
@@ -545,10 +514,10 @@ def details(position):
         )
         meta = f"""\
 name:      {name}
-status:     {status_str}  
-state:    {state_str}    
+status:    {status_str}  
+state:     {state_str}    
 added:     {added_str}  
-probed:  {probed_str}\
+probed:    {probed_str}\
 """
 
         res = f"""\
@@ -568,11 +537,11 @@ def edit(position):
     """Edit name and content for idea at POSITION."""
     console.clear()
     idea = get_idea_by_position(position)
-    click_log(f"starting with {idea = }")
+    # click_log(f"starting with {idea = }")
     if idea:
         id, name, status, state, added_, probed_, content = idea
         new_name, new_content = edit_content_with_nvim(name, content)
-        click_log(f"{position = }; {id = }; {new_name = }; {new_content = }")
+        # click_log(f"{position = }; {id = }; {new_name = }; {new_content = }")
         update_idea(position, new_name, new_content, None, None, None, timestamp())
         _list_all()
 

@@ -1,5 +1,29 @@
 # Notes
 
+
+age      0   1   2   3   4   5   6   7   8   9   10  11  12  13  14  15
+inkling  _   _   _   1   2   3   4   5   6   7   8   9   10  11  12  13
+notion   _   _   _   x   x   x   x   1   2   3   4   5   6   7   8   9
+idea     _   _   _   _   _   _   _   x   x   x   x   x   1   2   3   4   5   6
+
+start at 3 for inkling => 4 for notion and 5 for age
+inkling_late = age - 3 = age - X
+notion_late = age - 3 - 4 = age - X - X - 1 = age - 2X - 1 
+idea_late = age - 3 - 4 - 5 = age - 12 = age - 2X - 1 - X - 2 = age - 3X - 3 
+
+ages = x, y, z (3, 4, 5)
+
+inkling_late = age - x 
+notion_late = age - x - y
+idea_late = age - x - y - z
+warning = w 
+
+inkling_late = 0 => inkling_age_color == inkling color (on time) then progesses to red over the next w periods
+notion_late = 0 => notion_age_color == notion color (on time) then progesses to red over the next w periods
+
+
+
+
 def show (list of status names)
 
     list of names -> list of numbers 

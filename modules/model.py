@@ -20,12 +20,9 @@ def timestamp() -> int:
 
 
 def format_datetime(
-    seconds: int, fmt: str = "%Y-%m-%d %H:%M %Z", stage: int = 1, use_color=False
+    seconds: int, fmt: str = "%Y-%m-%d %H:%M %Z", stage: int = 1
 ) -> str:
-    if use_color:
-        return f"[{get_color(stage, seconds)}]{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
-    else:
-        return f"{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
+    return f"{datetime.datetime.fromtimestamp(seconds).astimezone().strftime(fmt)}"
 
 
 # TODO: add optional log level to click_log?
@@ -42,10 +39,6 @@ def click_log(msg: str):
             msg,
             file=debug_file,
         )
-
-
-alert_color = "#ff4500"
-notice_color = "#ffa500"
 
 
 def hex_to_rgb(hex_color):
@@ -77,73 +70,52 @@ def interpolate_colors(color1, color2, n):
     return colors
 
 
-# Example usage
-start_color = "#fcf5f2"
-end_color = "#cc3300"
-num_colors = 10
-
-# gradient = interpolate_colors(start_color, end_color, num_colors)
-# print(gradient)
-
-
 oneperiod = 24 * 60 * 60  # seconds in one day
-status_ages = [0, 2, 5, 9, 14, 20, 26, 32]  # in periods
+status_ages = [0, 3, 7, 12, 17, 22]  # in periods
+status_periods = [3, 4, 3]  # for inkling, notion and idea
+warning_periods = 7  # how long to get to red after late
+idle_hours = 24 * 4  # 2 days in hours
 
-# status_colors = [
-#     #   inkling,    notion,      thought,      idea
-#     ["#3399FF", "#7aaf6c", "#b5d23d", "#e8f115"],  # age/row index 0
-#     ["#478fe6", "#9b9051", "#c8aa2e", "#eec210"],  # age/row index 1
-#     ["#8f6b8c", "#bc7136", "#de7b1b", "#f58809"],  # age/row index 2
-#     ["#cc4c40", "#de521b", "#f0530c", "#f96205"],  # age/row index 3
-#     ["#ff3300", "#ff3300", "#ff3300", "#ff3300"],  # age/row index 4
-# ]
-
-
-type_colors = interpolate_colors("#7dbe20", "#ffff00", 4)
-# click_log(f"{type_colors = }")
-
-# status_colors = [
-#     interpolate_colors("#73e600", "#FF3300", 4),
-#     interpolate_colors("#7AAF6C", "#FF3300", 4),
-#     interpolate_colors("#B5D23D", "#FF3300", 4),
-#     interpolate_colors("#E8F115", "#FF3300", 4),
-# ]
+type_colors = interpolate_colors("#7dbe20", "#ffff00", 3)
 
 status_colors = [
-    interpolate_colors(type_colors[0], "#FF3300", 4),
-    interpolate_colors(type_colors[1], "#FF3300", 4),
-    interpolate_colors(type_colors[2], "#FF3300", 4),
-    interpolate_colors(type_colors[3], "#FF3300", 4),
+    interpolate_colors(type_colors[0], "#FF3300", warning_periods),
+    interpolate_colors(type_colors[1], "#FF3300", warning_periods),
+    interpolate_colors(type_colors[2], "#FF3300", warning_periods),
+]
+
+idle_colors = [
+    interpolate_colors(type_colors[0], "#FFcc00", idle_hours),
+    interpolate_colors(type_colors[1], "#FFcc00", idle_hours),
+    interpolate_colors(type_colors[2], "#FFcc00", idle_hours),
 ]
 
 
-idle_colors = interpolate_colors("#ffffff", "#ff9900", 32)
-
-idle_ages = [x // 2 for x in range(32)]
-
-
-def get_color(color_type: int, seconds: int):
-    color = "#cc9900"
-    pos = 0
+def get_age_color(color_type: int, seconds: int):
     try:
-        periods = round(seconds / oneperiod)
-        if color_type in [0, 1, 2, 3]:  # colors from status_ages and colors
-            pos = find_position(status_ages[color_type:], periods)
-            color = (
-                status_colors[color_type][pos]
-                if pos <= 4
-                else status_colors[color_type][-1]
-            )
-        elif color_type == 4:  # colors from idle_ages and colors
-            pos = find_position(idle_ages, periods)
-            color = idle_colors[pos] if pos <= 21 else idle_colors[-1]
-            click_log(f"got {color = } for {pos = }")
+        periods = round(seconds / oneperiod)  # days
+        late = min(max(periods - status_periods[color_type], 0), warning_periods)
+        color = status_colors[color_type][late]
+        click_log(f"got {color = } for {late = } and {color_type = }")
         return color
     except Exception as e:
+        click_log(f"Exception {e} raised processing {color_type = } and {seconds = }")
+        return "#FF3300"
+
+
+def get_idle_color(color_type: int, seconds: int):
+    try:
+        hours = round(seconds / (60 * 60))  # hours instead of days
+        idle = min(hours, idle_hours)
         click_log(
-            f"Exception {e} raised processing {color_type = } and {seconds = } for {pos = }"
+            f"{hours = }; {color_type = }; {idle = }; {len(idle_colors[color_type])}"
         )
+        color = idle_colors[color_type][idle]
+        click_log(f"got {color = } for {idle = } and {color_type = }")
         return color
+    except Exception as e:
+        click_log(f"Exception {e} raised processing {color_type = } and {seconds = }")
+        return "#FF3300"
 
 
 def is_valid_path(path):
@@ -201,18 +173,28 @@ def skip_show_units(seconds: int, num: int = 1):
     return round_labels, show_labels
 
 
-def format_timedelta(
-    total_seconds: int, num: int = 1, color_type: int = 1, use_colors=False
-) -> str:
-    # if total_seconds == 0:
-    #     return "0m"
+def format_age_color(total_seconds: int, num: int = 1, color_type: int = 1):
+    ret = format_timedelta(total_seconds=total_seconds, num=num, color_type=color_type)
+    color = get_age_color(color_type, total_seconds)
+    ret = f"[{color}]" + ret
+    return ret
+
+
+def format_idle_color(total_seconds: int, num: int = 1, color_type: int = 1):
+    ret = format_timedelta(total_seconds=total_seconds, num=num, color_type=color_type)
+    color = get_idle_color(color_type, total_seconds)
+    ret = f"[{color}]" + ret
+    return ret
+
+
+def format_timedelta(total_seconds: int, num: int = 1, color_type: int = 1) -> str:
     sign = ""
     if total_seconds < 0:
         sign = "-"
         total_seconds = abs(total_seconds)
     until = []
     skip, show = skip_show_units(total_seconds, num)
-    click_log(f"{skip = }; {show = }")
+    # click_log(f"{skip = }; {show = }")
 
     years = weeks = days = hours = minutes = 0
     if total_seconds:
@@ -259,12 +241,6 @@ def format_timedelta(
     if not until:
         until.append("0s")
     ret = f"{sign}{''.join(until)}"
-    click_log(f"{ret = }")
-
-    if use_colors:
-        color = get_color(color_type, total_seconds)
-        click_log(f"{color_type = }; {seconds = }; {color = }")
-        ret = f"[{color}]" + ret
 
     return ret
 
@@ -293,7 +269,5 @@ def edit_content_with_nvim(name: str, content: str):
 
     # Cleanup
     os.unlink(temp_path)
-
-    click_log(f"{new_name}; {new_content = }")
 
     return new_name, new_content

@@ -20,25 +20,27 @@ def find_position(times, x):
 
 # from etm.model import parse
 
-num_items = 18
+num_items = 9
 onehour = 60 * 60  # in seconds
 oneday = 24 * onehour  # in seconds
-now = round(datetime.now().timestamp())
-times = [now - x for x in range(oneday, 16 * oneday, onehour)]
+# now = round(datetime.now().timestamp())
+# times = [x for x in range(oneday, 10 * oneday, onehour)]
+max_days = 10
 
 
-def probed(times, added):
-    pos = bisect.bisect_right(times, added) - 1
-    if pos >= 0:
-        return random.choice(times[pos:])
-    else:
-        return now
+# def probed(times, added):
+#     pos = bisect.bisect_right(times, added) - 1
+#     if pos >= 0:
+#         return random.choice(times[pos:])
+#     else:
+#         return now
 
 
 def added_probed():
-    added = random.choice(times)
-    later_times = [x for x in times if x >= added]
-    return added, random.choice(later_times)
+    now = round(datetime.now().timestamp())
+    larger = random.choice([x for x in range(oneday, max_days * oneday, onehour)])
+    smaller = random.choice([x for x in range(0, larger // 3, 60)])
+    return now - larger, now - smaller
 
 
 def name():
@@ -59,21 +61,17 @@ def status():
             "notion",
             "notion",
             "notion",
-            "thought",
-            "thought",
-            "thought",
             "idea",
             "idea",
         ]
     )
-    # return random.choice([0, 0, 0, 0, 1, 1, 1, 2, 2, 3])
 
 
 def content():
     return f"{lorem.sentence()}"
 
 
-def make_examples(egfile: str = None, num_items: int = num_items, last_id=0):
+def make_examples(egfile: str, num_items: int = num_items):
     examples = []
 
     for _ in range(num_items):

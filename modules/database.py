@@ -73,32 +73,6 @@ def initialize_settings():
 initialize_settings()
 
 
-# def create_view():
-#     # Drop the view if it already exists
-#     c.execute("DROP VIEW IF EXISTS idea_positions")
-#
-#     # Create the SQL query dynamically
-#     query = """\
-# CREATE VIEW idea_positions AS
-# SELECT
-#     name,
-#     content,
-#     state,
-#     status,
-#     added,
-#     probed,
-#     id,
-#     ROW_NUMBER() OVER (ORDER BY state, status, id) AS position
-# FROM ideas
-#     """
-#     click_log(f"{query = }")
-#     res = c.execute(query)
-#     click_log(f"{res.fetchall() = }")
-#
-
-# create_view()
-
-
 def create_view(filter_condition=None):
     """
     Create the 'idea_positions' view, optionally with a filter condition.
@@ -151,7 +125,7 @@ def get_find():
     """
     c.execute("SELECT content FROM ideas WHERE id = 0")
     result = c.fetchone()[0]
-    click_log(f"{result = }")
+    # click_log(f"{result = }")
     if result:
         return result
     else:
@@ -204,10 +178,10 @@ def get_view_settings() -> List[int]:
     """
     c.execute("SELECT status FROM ideas WHERE id = 0")
     result = c.fetchone()[0]
-    click_log(f"{result = }")
+    # click_log(f"{result = }")
     if result:
         ret = decode_to_binary_list(result)
-        click_log(f"{ret = }")
+        # click_log(f"{ret = }")
         return ret
     else:
         # return [0, 0, 0, 0]
@@ -249,9 +223,9 @@ def get_ideas_from_view() -> List[Tuple]:
     global pos_to_id
     # Get current view settings
     show_binaries = get_view_settings()
-    click_log(f"{show_binaries = }")
+    # click_log(f"{show_binaries = }")
     show_list = pos_from_show_binaries(show_binaries)
-    click_log(f"{show_list = }")
+    # click_log(f"{show_list = }")
 
     # status_list = [1, 3]  # List of integers for filtering
     where_clauses = ["id > 0"]  # Always skip row 0
@@ -272,23 +246,23 @@ WHERE {where_clause}\
     """
 
     # Execute the query with the parameters for the placeholders
-    click_log(f"{query = }; {show_list}")
+    # click_log(f"{query = }; {show_list}")
     c.execute(query, show_list)  # Fetch ideas based on filters
     ideas = c.fetchall()
-    click_log(f"{ideas = }")
+    # click_log(f"{ideas = }")
     pos = 0
     for idea in ideas:
         pos += 1
         id = idea[0]
         pos_to_id[pos] = id
 
-    click_log(f"{pos_to_id = }")
+    # click_log(f"{pos_to_id = }")
     return ideas, show_list
 
 
 def get_id_from_position(position: int) -> int:
     """Get the ID of the idea at the specified position in the current view."""
-    click_log(f"{pos_to_id = }")
+    # click_log(f"{pos_to_id = }")
     id = pos_to_id.get(position)
     # click_log(f"{position = } -> {id = }")
     if id:
@@ -350,11 +324,11 @@ def insert_idea(
 def get_idea_by_position(position: int):
     try:
         # Get the ID from the position
-        click_log(f"calling get_id_from_position with {position = }")
+        # click_log(f"calling get_id_from_position with {position = }")
         idea_id = get_id_from_position(position)
         if not idea_id:
             return None
-        click_log(f"{position = }; {idea_id = }")
+        # click_log(f"{position = }; {idea_id = }")
     except ValueError as e:
         click.echo(str(e))
         return
@@ -425,7 +399,7 @@ def update_idea(
     query = f"{base_query} {', '.join(updates)} WHERE id = :id"
 
     # Execute the query with the parameters
-    click_log(f"{query =}; {params = }")
+    # click_log(f"{query =}; {params = }")
     with conn:
         c.execute(query, params)
 
@@ -434,7 +408,7 @@ def review_idea(position: int):
     try:
         # Get the ID from the position
         idea_id = get_id_from_position(position)
-        click_log(f"{position = } -> {idea_id = }")
+        # click_log(f"{position = } -> {idea_id = }")
     except ValueError as e:
         click.echo(str(e))
         return
@@ -458,7 +432,7 @@ def backup_with_retention(source_db: str, backup_dir: str, retention: int = 7):
     with sqlite3.connect(source_db) as conn:
         with sqlite3.connect(backup_file) as backup_conn:
             conn.backup(backup_conn)
-    click_log(f"Backup created: {backup_file}")
+    # click_log(f"Backup created: {backup_file}")
 
     # Enforce retention: Delete oldest files if over retention limit
     backups = sorted(
@@ -490,7 +464,7 @@ def backup_with_conditions(
     source_db: str, backup_dir: str, retention: int = 7, backup_interval_days: int = 1
 ):
     """keep 'last_backup' in the column 'added' and 'next_backup' in the column 'probed'"""
-    click_log("how now?")
+    # click_log("how now?")
     conn = sqlite3.connect(source_db)
     c = conn.cursor()
 
@@ -503,9 +477,9 @@ def backup_with_conditions(
     current_timestamp = get_current_timestamp()
     db_last_modified = get_file_last_modified(source_db)
 
-    click_log(
-        f"Current: {current_timestamp}, DB Last Modified: {db_last_modified}, Last Backup: {added}, Next Backup: {probed}"
-    )
+    # click_log(
+    #     f"Current: {current_timestamp}, DB Last Modified: {db_last_modified}, Last Backup: {added}, Next Backup: {probed}"
+    # )
 
     # Initialize backup settings if they are None
     if added is None or probed is None:
