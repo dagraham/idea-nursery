@@ -95,7 +95,7 @@ SELECT
     added,
     probed,
     id,
-    ROW_NUMBER() OVER (ORDER BY state, status, id) AS position
+    ROW_NUMBER() OVER (ORDER BY state, name, status, id) AS position
 FROM ideas
 """
 
@@ -139,7 +139,7 @@ def set_hide_encoded(lst: List[int]):
     In 4, 0/1 means show/hide items with state value 0 (paused). This integer is stored as "status" for item id 0.
     """
     ret = []
-    for x in [0, 1, 2, 3]:
+    for x in [0, 1, 2]:
         if x in lst:
             ret.append(1)
         else:
@@ -159,7 +159,7 @@ def set_show_encoded(lst: List[int]):
     In 4, 0/1 means show/hide items with state value 0 (paused). This integer is stored as "status" for item id 0.
     """
     ret = []
-    for x in [0, 1, 2, 3]:
+    for x in [0, 1, 2]:
         if x in lst:
             ret.append(0)
         else:
@@ -185,7 +185,7 @@ def get_view_settings() -> List[int]:
         return ret
     else:
         # return [0, 0, 0, 0]
-        return [1, 1, 1, 1]
+        return [1, 1, 1]
 
 
 def encode_binary_list(binary_list: List[int]) -> int:
@@ -195,7 +195,7 @@ def encode_binary_list(binary_list: List[int]) -> int:
     return result
 
 
-def decode_to_binary_list(encoded_int: int, length: int = 4) -> List[int]:
+def decode_to_binary_list(encoded_int: int, length: int = 3) -> List[int]:
     binary_list = []
     for _ in range(length):
         binary_list.append(encoded_int & 1)

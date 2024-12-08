@@ -68,7 +68,7 @@ def hide_pos_from_binary(lst_of_binaries:list[int])->list[int]:
 
 
 ```
-def show(rep:List[int])
+def show(rep:List[int]) 
 
 
 - [ ] list of integers argument

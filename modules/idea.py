@@ -6,7 +6,7 @@ import shlex
 import sqlite3
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Required, Tuple
 
 import click
 from click.testing import CliRunner
@@ -188,16 +188,50 @@ def set_home(home):
         update_tmp_home(home)
 
 
-@cli.command()
-def info():
-    """Display app information."""
-    console.print(
-        f"""\
-[#87CEFA]Idea[/#87CEFA]
-version: [green]{version}[/green]
-home:    [green]{idea_home}[/green]
-"""
-    )
+# @cli.command()
+# def info():
+#     """Display app information."""
+#     console.print(
+#         f"""\
+# [#87CEFA]Idea[/#87CEFA]
+# version: [green]{version}[/green]
+# home:    [green]{idea_home}[/green]
+# """
+#     )
+#
+
+
+@cli.command("a", short_help="Alias for add")
+@click.argument("name", type=str, nargs=-1)
+@click.option("--content", type=str)
+@click.option(
+    "--status",
+    type=click.Choice([r for r in status_names]),
+    default=status_names[0],
+    help="status of the idea",
+)
+@click.option(
+    "--state",
+    type=click.Choice([s for s in state_names]),
+    default=state_names[1],
+    help="state of the idea",
+)
+@click.option(
+    "--added",
+    type=int,
+    default=timestamp(),
+    help="added timestamp in seconds since the epoch",
+)
+@click.option(
+    "--probed",
+    type=int,
+    default=timestamp(),
+    help="probed timestamp in seconds since the epoch",
+)
+@click.pass_context
+def add_alias(ctx, name, content, status, state, added, probed):
+    """Shortcut for "add". Add a new idea with NAME and, optionally, CONTENT."""
+    ctx.forward(add)
 
 
 @cli.command(short_help="Adds an idea")
@@ -352,9 +386,12 @@ def delete(position):
 @click.argument(
     "types",
     type=str,
+    required=False,
 )
 def show(types: str):
-    """Show specific ideas based on their status names."""
+    """Show only ideas with specified status names."""
+    if types is None:
+        types = ""
     type_lst = types.split()
     show_positions = []
     for s in type_lst:
@@ -372,9 +409,12 @@ def show(types: str):
 @click.argument(
     "types",
     type=str,
+    required=False,
 )
 def hide(types: str):
     """Hide specific ideas based on their status names."""
+    if types is None:
+        types = ""
     type_lst = types.split()
     hide_positions = []
     for s in type_lst:
@@ -388,9 +428,15 @@ def hide(types: str):
     _list_all()
 
 
+@cli.command("l", short_help="Alias for list")
+def list_alias(short_help="Lists aliases"):
+    """Alias for "list". Lists all ideas satisfying the current find and show settings."""
+    _list_all()
+
+
 @cli.command(short_help="Lists ideas")
 def list():
-    """List all ideas based on the current focus settings.
+    """List all ideas satisfying the current find and show settings.
     The POSITION number in the first column is used to specify an idea in commands,
     e.g., "details 3" to see the details of an idea at POSITION 3. The age and idle
     columns refer to how long ago the idea was, repectively, added or last probed/modified.
@@ -407,7 +453,7 @@ def _list_all():
     hide = []
 
     if show_list:
-        hidden = [x for x in [0, 1, 2, 3] if x not in show_list]
+        hidden = [x for x in [0, 1, 2] if x not in show_list]
         for pos in hidden:
             hide.append(f"{status_names[pos]}")
 
@@ -477,10 +523,28 @@ def _list_all():
     console.print(table)
 
 
+@cli.command("i", short_help="Alias for info")
+@click.argument("position", type=int, required=False)
+@click.pass_context
+def info_alias(ctx, position):
+    """Alias for info. If given, show details for idea at POSITION, else application information."""
+    ctx.forward(info)
+
+
 @cli.command(short_help="Shows details for idea")
-@click.argument("position", type=int)
-def details(position):
-    """Show details for idea at POSITION."""
+@click.argument("position", type=int, required=False)
+def info(position):
+    """If given, show details for idea at POSITION, else application information."""
+    if position is None:
+        console.print(
+            f"""\
+[#87CEFA]Idea[/#87CEFA]
+version: [green]{version}[/green]
+home:    [green]{idea_home}[/green]
+"""
+        )
+        return
+
     now = timestamp()
     console.clear()
     idea = get_idea_by_position(position)
@@ -531,9 +595,17 @@ probed:    {probed_str}\
         console.print(f"[red]Idea at position {position} not found![/red]")
 
 
+@cli.command("e", short_help="Alias for edit")
+@click.argument("position", type=int)
+@click.pass_context
+def edit_alias(ctx, position):
+    """Alias for "edit". Edit name and content for idea at POSITION."""
+    ctx.forward(edit)
+
+
 @cli.command(short_help="Review and edit name and content for idea in nvim")
 @click.argument("position", type=int)
-def edit(position):
+def edit(position: int):
     """Edit name and content for idea at POSITION."""
     console.clear()
     idea = get_idea_by_position(position)
@@ -544,6 +616,26 @@ def edit(position):
         # click_log(f"{position = }; {id = }; {new_name = }; {new_content = }")
         update_idea(position, new_name, new_content, None, None, None, timestamp())
         _list_all()
+
+
+# @cli.command("review")
+# @click.argument("position", type=int)
+# def review(position):
+#     """
+#     Review the idea for a specific position.
+#     """
+#     click.echo(f"Reviewing idea at position {position}...")
+#
+#
+# @cli.command("re")  # Shortcut for "review"
+# @click.argument("position", type=int)
+# @click.pass_context
+# def review_shortcut(ctx, position):
+#     """
+#     Shortcut for the review command.
+#     """
+#     ctx.forward(review)
+#
 
 
 def main():
@@ -558,7 +650,7 @@ def main():
         else:
             cli.main(prog_name="idea")
     except Exception as e:
-        console.print(f"[red]An unexpected error occurred: {e}[/red]")
+        console.print(f"[red]An unexpected error occurred in main: {e}[/red]")
 
 
 if __name__ == "__main__":

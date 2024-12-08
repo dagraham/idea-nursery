@@ -96,7 +96,7 @@ def get_age_color(color_type: int, seconds: int):
         periods = round(seconds / oneperiod)  # days
         late = min(max(periods - status_periods[color_type], 0), warning_periods)
         color = status_colors[color_type][late]
-        click_log(f"got {color = } for {late = } and {color_type = }")
+        # click_log(f"got {color = } for {late = } and {color_type = }")
         return color
     except Exception as e:
         click_log(f"Exception {e} raised processing {color_type = } and {seconds = }")
@@ -107,11 +107,11 @@ def get_idle_color(color_type: int, seconds: int):
     try:
         hours = round(seconds / (60 * 60))  # hours instead of days
         idle = min(hours, idle_hours)
-        click_log(
-            f"{hours = }; {color_type = }; {idle = }; {len(idle_colors[color_type])}"
-        )
+        # click_log(
+        #     f"{hours = }; {color_type = }; {idle = }; {len(idle_colors[color_type])}"
+        # )
         color = idle_colors[color_type][idle]
-        click_log(f"got {color = } for {idle = } and {color_type = }")
+        # click_log(f"got {color = } for {idle = } and {color_type = }")
         return color
     except Exception as e:
         click_log(f"Exception {e} raised processing {color_type = } and {seconds = }")
